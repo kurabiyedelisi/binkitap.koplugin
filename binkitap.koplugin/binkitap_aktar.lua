@@ -202,7 +202,7 @@ return function(BinKitap)
                             UIManager:close(dialog)
                             self:aktarilanVurgulariSirala(secilen, false)
                         end }},
-                        {{ text = _("Özel not (yalnızca sen görürsün)"), callback = function()
+                        {{ text = _("Gizli (yalnızca sen görürsün)"), callback = function()
                             UIManager:close(dialog)
                             self:aktarilanVurgulariSirala(secilen, true)
                         end }},

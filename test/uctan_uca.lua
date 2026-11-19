@@ -611,9 +611,9 @@ ap = son("ButtonDialog")
 dugme(ap, "Not").callback()
 local nd = son("InputDialog"); nd._girdi = "bana not"
 dugme(nd, "Tamam").callback()
-dugme(son("ButtonDialog"), "Özel not yap").callback()
+dugme(son("ButtonDialog"), "Gizli yap").callback()
 ap = son("ButtonDialog")
-kontrol(ap.title:find("Özel not olarak gidecek", 1, true) ~= nil, "özel not modu")
+kontrol(ap.title:find("Gizli: yalnızca sen görürsün", 1, true) ~= nil, "gizli modu")
 dugme(ap, "Gönder").callback(); calistir()
 local n = notlar[#notlar]
 kontrol(n and n.hedefTuru == "kitap" and n.hedefId == "24319" and n["not"] == "“Gizli düşünce” (s. 179)\n\nbana not" and #n.notAnahtari == 16 and n.surum == "0" and n.notId == "", "not-ayarla gövdesi doğru")
@@ -644,7 +644,8 @@ local menu = son("Menu")
 menuSec(menu, function(it) return it.text and it.text:find("elle bir", 1, true) end)
 kontrol(menu.item_table[1].text == "Seçilenleri gönder (1)", "sayaç güncellendi")
 onceki_alinti = #alintilar
-menuSec(menu, function(it) return it.eylem == "onay" end); calistir()
+menuSec(menu, function(it) return it.eylem == "onay" end)
+dugme(son("ButtonDialog"), "Herkese açık alıntı").callback(); calistir()
 kontrol(#alintilar == onceki_alinti + 1 and alintilar[#alintilar].soz == "elle bir", "sadece seçilen gönderildi")
 p:topluGonder()
 kontrol(son("ButtonDialog").title:find("gönderilmemiş 2 vurgu", 1, true) ~= nil, "gönderilen tekrar sayılmadı")
@@ -1018,7 +1019,7 @@ fm.settings:saveSetting("kitapliga_ekle", nil)
 do
 print("28) GitHub'dan güncelleme")
 local G = Plugin._guncelleme
-kontrol(Plugin.SURUM == "0.2.8", "sürüm _meta.lua'dan okundu: " .. tostring(Plugin.SURUM))
+kontrol(Plugin.SURUM == "0.2.9", "sürüm _meta.lua'dan okundu: " .. tostring(Plugin.SURUM))
 kontrol(G.dahaYeni("1.2.10", "1.2.9") and G.dahaYeni("1.3", "1.2.9") and not G.dahaYeni("1.2.3", "1.2.3")
   and not G.dahaYeni("1.2.2", "1.2.3"), "sürüm karşılaştırma sayıyla yapılıyor")
 local ayar_ogeleri = fm:ayarlarMenusu()
@@ -1027,7 +1028,7 @@ for _, o in ipairs(ayar_ogeleri) do
   if o.text and o.text:find("^Güncellemeleri denetle") then gun_oge = o end
   if o.text == "Haftada bir kendiliğinden denetle" then oto_oge = o end
 end
-kontrol(gun_oge and gun_oge.text == "Güncellemeleri denetle (sürüm 0.2.8)" and oto_oge and oto_oge.checked_func(),
+kontrol(gun_oge and gun_oge.text == "Güncellemeleri denetle (sürüm 0.2.9)" and oto_oge and oto_oge.checked_func(),
   "ayarlarda denetle düğmesi ve varsayılan açık haftalık denetim")
 
 local DIZ = GERCEK .. "/binkitap.koplugin"
@@ -1035,7 +1036,7 @@ gercek_lfs.mkdir(GERCEK); gercek_lfs.mkdir(DIZ)
 local function yaz(yol, m) local h = assert(io.open(yol, "wb")); h:write(m); h:close() end
 local function oku(yol) local h = io.open(yol, "rb"); if not h then return nil end; local m = h:read("*a"); h:close(); return m end
 yaz(DIZ .. "/main.lua", "-- eski main\n")
-yaz(DIZ .. "/_meta.lua", 'return { version = "0.2.8" }\n')
+yaz(DIZ .. "/_meta.lua", 'return { version = "0.2.9" }\n')
 yaz(DIZ .. "/ayar.lua", 'return { oturum_kodu = "GIZLI" }\n')
 fm.path = DIZ
 
@@ -1056,56 +1057,56 @@ local function depoKur(surum, dosyalar, bozuk)
   GITHUB[LISTE] = encode(liste)
 end
 
-depoKur("0.2.8", { ["main.lua"] = "-- aynı\n" })
+depoKur("0.2.9", { ["main.lua"] = "-- aynı\n" })
 fm:guncellemeDenetle(false)
-kontrol(son("InfoMessage").text == "En son sürümü kullanıyorsun (0.2.8).", "güncel: " .. son("InfoMessage").text)
+kontrol(son("InfoMessage").text == "En son sürümü kullanıyorsun (0.2.9).", "güncel: " .. son("InfoMessage").text)
 kontrol(fm.settings:readSetting("guncelleme_son_denetim") == os.time(), "denetim zamanı kaydedildi")
 
 GITHUB[HAM .. "_meta.lua"] = 503
 fm:guncellemeDenetle(false)
 kontrol(son("InfoMessage").text:find("HTTP 503", 1, true) ~= nil, "hata gösterildi: " .. son("InfoMessage").text)
 
-depoKur("0.2.9", { ["main.lua"] = "-- yeni main\nreturn 1\n", ["binkitap_yeni.lua"] = "return {}\n", ["ayar.lua"] = "return { oturum_kodu = \"SIFIRLANDI\" }\n" })
+depoKur("0.2.10", { ["main.lua"] = "-- yeni main\nreturn 1\n", ["binkitap_yeni.lua"] = "return {}\n", ["ayar.lua"] = "return { oturum_kodu = \"SIFIRLANDI\" }\n" })
 fm:guncellemeDenetle(false)
 local gk = son("ConfirmBox")
-kontrol(gk and gk.text:find("yeni sürümü var: 0.2.9 (sendeki 0.2.8)", 1, true) ~= nil, "yeni sürüm soruldu")
+kontrol(gk and gk.text:find("yeni sürümü var: 0.2.10 (sendeki 0.2.9)", 1, true) ~= nil, "yeni sürüm soruldu")
 gk.ok_callback()
 kontrol(oku(DIZ .. "/main.lua") == "-- yeni main\nreturn 1\n" and oku(DIZ .. "/binkitap_yeni.lua") == "return {}\n"
-  and oku(DIZ .. "/_meta.lua"):find("0.2.9", 1, true), "yeni dosyalar yerinde")
+  and oku(DIZ .. "/_meta.lua"):find("0.2.10", 1, true), "yeni dosyalar yerinde")
 kontrol(oku(DIZ .. "/ayar.lua") == 'return { oturum_kodu = "GIZLI" }\n', "ayar.lua'ya dokunulmadı")
 local ayar_istendi = false
 for _, r in ipairs(istekler) do if r.url == HAM .. "ayar.lua" then ayar_istendi = true end end
 kontrol(not ayar_istendi, "depodaki ayar.lua indirilmedi bile")
 kontrol(oku(DIZ .. "/.yedek/main.lua") == "-- eski main\n", "eski sürüm .yedek'te")
 kontrol(gercek_lfs.attributes(DIZ .. "/.guncelleme/main.lua", "mode") == nil, "geçici klasörde dosya kalmadı")
-kontrol(son("Restart") and son("Restart").text:find("0.2.9", 1, true), "yeniden başlatma istendi")
-kontrol(fm.settings:readSetting("guncelleme_kurulan") == "0.2.9", "kurulan sürüm kaydedildi")
+kontrol(son("Restart") and son("Restart").text:find("0.2.10", 1, true), "yeniden başlatma istendi")
+kontrol(fm.settings:readSetting("guncelleme_kurulan") == "0.2.10", "kurulan sürüm kaydedildi")
 fm:guncellemeDenetle(false)
-kontrol(son("InfoMessage").text:find("0.2.9 zaten indirildi", 1, true) ~= nil, "yeniden başlatmadan önce tekrar sormuyor")
+kontrol(son("InfoMessage").text:find("0.2.10 zaten indirildi", 1, true) ~= nil, "yeniden başlatmadan önce tekrar sormuyor")
 
 local once_main = oku(DIZ .. "/main.lua")
-depoKur("0.2.10", { ["main.lua"] = "bu lua değil (\n" })
-fm:guncellemeKur("0.2.10")
+depoKur("0.2.11", { ["main.lua"] = "bu lua değil (\n" })
+fm:guncellemeKur("0.2.11")
 kontrol(son("InfoMessage").text:find("main.lua bozuk", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "bozuk dosya: hiçbir şey değişmedi")
-depoKur("0.2.10", { ["main.lua"] = "return 2\n" }, { boyut = "main.lua" })
-fm:guncellemeKur("0.2.10")
+depoKur("0.2.11", { ["main.lua"] = "return 2\n" }, { boyut = "main.lua" })
+fm:guncellemeKur("0.2.11")
 kontrol(son("InfoMessage").text:find("eksik indi", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "eksik indirme: hiçbir şey değişmedi")
-depoKur("0.2.10", { ["main.lua"] = "return 2\n", ["resimler"] = "x" }, { klasor = "resimler" })
-fm:guncellemeKur("0.2.10")
+depoKur("0.2.11", { ["main.lua"] = "return 2\n", ["resimler"] = "x" }, { klasor = "resimler" })
+fm:guncellemeKur("0.2.11")
 kontrol(son("InfoMessage").text:find("elle kurulmalı", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "yeni klasör içeren sürüm otomatik kurulmadı")
 
 -- haftalık sessiz denetim
-depoKur("0.2.11", { ["main.lua"] = "return 3\n" })
+depoKur("0.2.12", { ["main.lua"] = "return 3\n" })
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 2 * 24 * 3600)
 fm:onNetworkConnected(); calistir()
-kontrol(son("ConfirmBox") == gk or not son("ConfirmBox").text:find("0.2.11", 1, true), "iki gün önce denetlendiyse sormadı")
+kontrol(son("ConfirmBox") == gk or not son("ConfirmBox").text:find("0.2.12", 1, true), "iki gün önce denetlendiyse sormadı")
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 8 * 24 * 3600)
 fm:onNetworkConnected(); fm2:onNetworkConnected(); calistir()
 local sorular = 0
-for _, w in ipairs(gosterilen) do if w._tur == "ConfirmBox" and w.text:find("0.2.11", 1, true) then sorular = sorular + 1 end end
+for _, w in ipairs(gosterilen) do if w._tur == "ConfirmBox" and w.text:find("0.2.12", 1, true) then sorular = sorular + 1 end end
 kontrol(sorular == 1, "bir hafta geçince bir kez sordu (iki örnek açıkken bile)")
 kontrol(son("ConfirmBox").cancel_text == "Sonra", "sormadan kurmuyor")
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 8 * 24 * 3600)
@@ -1499,10 +1500,46 @@ for _, it in ipairs(vl.item_table) do if it.indeks then kalan_kitap = kalan_kita
 kontrol(kalan_kitap == 1, "ikinci kez sadece gönderilmemiş vurgusu olan kitap çıktı")
 menuSec(vl, function(it) return it.eylem == "hepsi" end)
 menuSec(vl, function(it) return it.eylem == "onay" end)
-dugme(son("ButtonDialog"), "Özel not").callback(); calistir()
+dugme(son("ButtonDialog"), "Gizli").callback(); calistir()
 local sn = notlar[#notlar]
 kontrol(#notlar == once_not + 1 and sn.hedefId == "800" and sn["not"]:find("“Eski biçim vurgu” (s. 298)", 1, true),
   "eski biçim vurgu özel not olarak gitti (120/200 × 496 ≈ 298): " .. tostring(sn["not"]))
+end
+
+do
+print("35) Gizli alıntı")
+local gann = {
+  { datetime = "2026-11-01 10:00:00", drawer = "lighten", text = "Gizli bir", page = "/body/DocFragment[2]/body/p[1]/text().0" },
+  { datetime = "2026-11-01 10:01:00", drawer = "lighten", text = "Gizli iki", page = "/body/DocFragment[3]/body/p[1]/text().0", note = "notum" },
+  { datetime = "2026-11-01 10:02:00", drawer = "lighten", text = "Gizli üç", page = "/body/DocFragment[4]/body/p[1]/text().0" },
+}
+local gui = yeniOkuyucu("/kobo/Kafka/Donusum.epub", { title = "Dönüşüm", authors = "Franz Kafka" }, 200, gann)
+local gp = Plugin:new{ ui = gui }
+gp:topluGonder()
+local d1 = son("ButtonDialog")
+kontrol(d1.buttons[1][1].text == "Hepsini herkese açık" and d1.buttons[1][2].text == "Hepsini gizli"
+  and d1.title:find("gizli alıntıları 1000Kitap'ta yalnızca sen görürsün", 1, true), "toplu gönderimde gizli seçeneği var")
+d1._kapandi = true
+gp.settings:saveSetting("alinti_gizli", true)
+local ayar_var = false
+for _, o in ipairs(gp:ayarlarMenusu()) do if o.text == "Alıntıları varsayılan olarak gizli paylaş" and o.checked_func() then ayar_var = true end end
+kontrol(ayar_var, "ayarlarda varsayılan gizli seçeneği")
+gp:topluGonder()
+local d2 = son("ButtonDialog")
+kontrol(d2.buttons[1][1].text == "Hepsini gizli", "varsayılan gizliyken önce gizli seçenek geliyor")
+local once_not, once_al = #notlar, #alintilar
+dugme(d2, "Hepsini gizli").callback(); calistir()
+kontrol(#notlar == once_not + 3 and #alintilar == once_al, "3 vurgu gizli gitti, herkese açık alıntı gitmedi")
+kontrol(notlar[once_not + 2]["not"]:find("“Gizli iki”", 1, true) and notlar[once_not + 2]["not"]:find("notum", 1, true)
+  and notlar[once_not + 2].hedefId == "701", "gizli alıntı metni, notu ve kitabı doğru")
+kontrol(son("InfoMessage").text:find("3 gizli alıntı gönderildi", 1, true) ~= nil, "özet: " .. son("InfoMessage").text)
+gui.highlight._dugme.fn({ selected_text = { text = "Yeni bir cümle.", pos0 = "/body/DocFragment[5]/body/p[1]/text().0" }, onClose = function() end }).callback()
+local gw = son("ButtonDialog")
+kontrol(gw.title:find("Gizli: yalnızca sen", 1, true) and dugme(gw, "Herkese açık yap"), "alıntı penceresi gizli açıldı")
+gw._kapandi = true
+local renk_secenegi = gp:renkMenusu()[1].sub_item_table[3].text
+kontrol(renk_secenegi == "Gizli alıntı (yalnızca sen)", "renk seçeneğinde de gizli: " .. renk_secenegi)
+gp.settings:saveSetting("alinti_gizli", nil)
 end
 
 print("20) Menüler hatasız kuruluyor")

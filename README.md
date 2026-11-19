@@ -4,13 +4,13 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 0.2.8 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 0.2.9 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
 - **Kitabını tanır.** ISBN'den ya da Calibre'de eklediğin `1000kitap:<id>` etiketinden doğru baskıyı sormadan bulur. Bulamazsa yayınevleriyle birlikte seçenek sunar.
-- **Alıntılarını gönderir.** Metni seç, "1000Kitap'a gönder"e dokun. Sayfa numarası basılı baskıya göre hesaplanır. İstersen özel not olarak da gönderebilirsin.
-- **Renge göre kendiliğinden gönderir.** Örneğin sarı vurgular herkese açık alıntı, mavi vurgular özel not olarak gider.
+- **Alıntılarını gönderir.** Metni seç, "1000Kitap'a gönder"e dokun. Sayfa numarası basılı baskıya göre hesaplanır. İstersen gizli paylaşırsın; o zaman yalnızca sen görürsün.
+- **Renge göre kendiliğinden gönderir.** Örneğin sarı vurgular herkese açık alıntı, mavi vurgular gizli alıntı olarak gider.
 - **İleti yazdırır.** Alıntı olmayan kendi yazını 1000Kitap'ta ileti olarak paylaşabilirsin, okuduğun kitabı etiketleyerek.
 - **Geçmişini aktarır.** KOReader'da daha önce bitirdiğin kitapları bulup 1000Kitap'ta "Okudum" yapar, istersen o kitaplardaki vurguları da gönderir.
 - **Okuma durumunu takip eder.** Kitabı açınca "Okuyorum" yapar. Kitap bitince tek ekranda "Okudum", puan ve kısa inceleme alır.
@@ -73,8 +73,9 @@ Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "gir
 
 ### Okurken
 
-- **Alıntı:** Metni seç → **1000Kitap'a gönder.** Metni, sayfayı ve notu düzeltebilir; konu ve yorum izni seçebilir ya da özel not yapabilirsin.
-- **Bu kitabın vurgularını gönder:** Hepsini ya da seçtiklerini gönderir. Daha önce gönderilen vurgu tekrar gitmez.
+- **Alıntı:** Metni seç → **1000Kitap'a gönder.** Metni, sayfayı ve notu düzeltebilir; konu ve yorum izni seçebilirsin.
+- **Gizli alıntı:** Alıntı penceresinde **Gizli yap**'a dokun. Gizli alıntıları 1000Kitap'ta yalnızca sen görürsün: kitabın sayfasında özel notların arasında durur, profilinde ve akışta görünmez. Hep gizli paylaşmak istersen **Ayarlar → Alıntıları varsayılan olarak gizli paylaş**'ı aç. Toplu gönderimde, vurgu aktarımında ve renk ayarlarında da gizli seçeneği var.
+- **Bu kitabın vurgularını gönder:** Hepsini ya da seçtiklerini, herkese açık ya da gizli gönderir. Daha önce gönderilen vurgu tekrar gitmez.
 - **Okuma durumu:** Kitabı açınca "Okuyorum" olur; daha önce okuduğun kitaba dokunulmaz. KOReader'da kitabı Bitti, Beklemede ya da Okunuyor yaparsan 1000Kitap'a da yansır.
 - **Bitiş ekranı:** Kitap bitince "Okudum", 1–10 puan ve inceleme tek ekranda.
 - **Okuma ilerlemesi ve seanslar** (varsayılan kapalı): Sayfanı ve okuma süreni gönderir.
@@ -87,7 +88,7 @@ Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "gir
 1. KOReader'da "Bitti" olarak işaretlenmiş kitapların bulunur. Kitaplar açılmaz, bilgiler KOReader'ın kendi kayıtlarından okunur.
 2. Liste açılır: "Bitti" olanlar seçili gelir. Sonuna kadar okunmuş ama "Bitti" işaretlenmemiş olanlar da listede durur, ama seçili gelmez. Yarım bıraktıkların listede çıkmaz.
 3. Seçtiklerin 1000Kitap'ta **Okudum** olur. Eşleşmemiş olanlar önce 1000Kitap'ta aranır.
-4. Ardından vurgusu olan kitaplar listelenir; hangilerinin vurgularını göndereceğini seçersin, hiçbirini seçmeden kapatabilirsin. Vurgular herkese açık alıntı ya da özel not olarak gider; sayfa numaraları basılı baskıya göre hesaplanır.
+4. Ardından vurgusu olan kitaplar listelenir; hangilerinin vurgularını göndereceğini seçersin, hiçbirini seçmeden kapatabilirsin. Vurgular herkese açık ya da gizli alıntı olarak gider; sayfa numaraları basılı baskıya göre hesaplanır.
 
 Daha önce gönderilmiş vurgular tekrar gönderilmez.
 

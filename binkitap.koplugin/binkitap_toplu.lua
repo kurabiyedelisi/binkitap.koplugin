@@ -167,25 +167,40 @@ return function(BinKitap)
             return self:bildir(_("Bu kitapta gönderilmemiş vurgu yok."))
         end
 
-        local function gonder(secilenler)
+        local function gonder(secilenler, ozel)
+            local ogeler = {}
             for _i, a in ipairs(secilenler) do
-                self:siraya(self:vurgudanOge(kitap, a, false))
+                ogeler[#ogeler + 1] = self:vurgudanOge(kitap, a, ozel)
                 gonderilen[self:vurguAnahtari(a)] = true
             end
             self.ui.doc_settings:saveSetting("binkitap_gonderilen", gonderilen)
-            if not Api:kimlikVar() then return self:kimlikUyarisi() end
-            NetworkMgr:runWhenOnline(function() self:kuyruguGonder(false) end)
+            self:topluSiraya(ogeler)
+            self:sirayiGonder(#ogeler)
+        end
+
+        local gizli_once = self.settings:isTrue("alinti_gizli")
+        local function gorunurlukSor(secilenler)
+            local d
+            local acik = { text = _("Herkese açık alıntı"), callback = function() UIManager:close(d); gonder(secilenler, false) end }
+            local gizli = { text = _("Gizli (yalnızca sen)"), callback = function() UIManager:close(d); gonder(secilenler, true) end }
+            d = ButtonDialog:new{
+                title = T(_("%1 vurgu nasıl gönderilsin?"), #secilenler),
+                buttons = {
+                    gizli_once and { gizli, acik } or { acik, gizli },
+                    {{ text = _("Vazgeç"), callback = function() UIManager:close(d) end }},
+                },
+            }
+            UIManager:show(d)
         end
 
         local dialog
+        local hepsi_acik = { text = _("Hepsini herkese açık"), callback = function() UIManager:close(dialog); gonder(bekleyen, false) end }
+        local hepsi_gizli = { text = _("Hepsini gizli"), callback = function() UIManager:close(dialog); gonder(bekleyen, true) end }
         dialog = ButtonDialog:new{
-            title = T(_("Bu kitapta daha önce gönderilmemiş %1 vurgu var. Gönderdiklerin 1000Kitap'ta herkese açık alıntı olarak paylaşılır."), #bekleyen),
+            title = T(_("Bu kitapta daha önce gönderilmemiş %1 vurgu var.\n\nHerkese açık alıntılar profilinde ve akışta görünür; gizli alıntıları 1000Kitap'ta yalnızca sen görürsün."), #bekleyen),
             buttons = {
+                gizli_once and { hepsi_gizli, hepsi_acik } or { hepsi_acik, hepsi_gizli },
                 {
-                    { text = _("Hepsini gönder"), callback = function()
-                        UIManager:close(dialog)
-                        gonder(bekleyen)
-                    end },
                     { text = _("Seçerek gönder"), callback = function()
                         UIManager:close(dialog)
                         local ogeler = {}
@@ -203,7 +218,7 @@ return function(BinKitap)
                             baslik = T(_("%1 — vurgular"), kitap.adi),
                             ogeler = ogeler,
                             onay_metni = _("Seçilenleri gönder (%1)"),
-                            onay = gonder,
+                            onay = gorunurlukSor,
                         }
                     end },
                 },

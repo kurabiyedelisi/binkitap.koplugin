@@ -659,7 +659,7 @@ function BinKitap:yeniAlinti(metin, pos, pageno, not_metni, on_sirada)
         soz = metin,
         sayfa = sayfa and tostring(sayfa) or "",
         ekbilgi = not_metni or "",
-        ozel = false,
+        ozel = self.settings:isTrue("alinti_gizli"),
         yorum_ayari = self.settings:readSetting("yorum_ayari") or 0,
         on_sirada = on_sirada,
     })
@@ -680,7 +680,7 @@ function BinKitap:alintiPenceresi(taslak)
     }
     if taslak.ekbilgi ~= "" then satirlar[#satirlar + 1] = T(_("Not: %1"), kisalt(taslak.ekbilgi, 200)) end
     if taslak.ozel then
-        satirlar[#satirlar + 1] = _("Özel not olarak gidecek (yalnızca sen görürsün).")
+        satirlar[#satirlar + 1] = _("Gizli: yalnızca sen görürsün. 1000Kitap'ta kitabın sayfasında özel notların arasında durur; profilinde ve akışta görünmez.")
     else
         satirlar[#satirlar + 1] = T(_("Herkese açık alıntı · Konu: %1 · Yorumlar: %2"),
             taslak.konu_adi or _("yok"), yorumAyariAdi(taslak.yorum_ayari))
@@ -698,7 +698,7 @@ function BinKitap:alintiPenceresi(taslak)
             },
             {
                 {
-                    text = taslak.ozel and _("Herkese açık yap") or _("Özel not yap"),
+                    text = taslak.ozel and _("Herkese açık yap") or _("Gizli yap"),
                     callback = kapatVe(function()
                         taslak.ozel = not taslak.ozel
                         self:alintiPenceresi(taslak)
@@ -1263,7 +1263,7 @@ function BinKitap:ogeGonder(oge)
 end
 
 local OZET_METNI = {
-    alinti = "%1 alıntı gönderildi.", ozel_not = "%1 özel not gönderildi.", ileti = "%1 ileti paylaşıldı.",
+    alinti = "%1 alıntı gönderildi.", ozel_not = "%1 gizli alıntı gönderildi.", ileti = "%1 ileti paylaşıldı.",
     puan = "%1 puan gönderildi.", inceleme = "%1 inceleme gönderildi.",
     ilerleme = "%1 ilerleme gönderildi.", seans = "%1 okuma seansı gönderildi.",
     kitaplik_ekle = "%1 kitap kitaplığına eklendi.", kitaplik_cikar = "%1 kitap kitaplığından çıkarıldı.",
@@ -1671,7 +1671,7 @@ function BinKitap:renkMenusu()
     local secenekler = {
         { kod = nil, ad = _("Gönderme") },
         { kod = "alinti", ad = _("Herkese açık alıntı") },
-        { kod = "ozel", ad = _("Özel not") },
+        { kod = "ozel", ad = _("Gizli alıntı (yalnızca sen)") },
     }
     for _i, r in ipairs(RENKLER) do
         local alt = {}
@@ -1700,7 +1700,7 @@ function BinKitap:renkMenusu()
             text_func = function()
                 local e = self.settings:readSetting("renk_eylemleri") or {}
                 local ad = (e[r.kod] == "alinti" and _("herkese açık alıntı"))
-                    or (e[r.kod] == "ozel" and _("özel not")) or _("gönderme")
+                    or (e[r.kod] == "ozel" and _("gizli alıntı")) or _("gönderme")
                 return T(_("%1: %2"), r.ad, ad)
             end,
             sub_item_table = alt,
@@ -1772,6 +1772,12 @@ function BinKitap:ayarlarMenusu()
             callback = function() self.settings:flipTrue("kitapliga_ekle"); self.settings:flush() end,
             help_text = _("Bir kitap 1000Kitap'la eşleştiğinde (kütüphane eşleştirmesi dahil) 1000Kitap'taki kitaplığına da eklenir. Eşleşmeyi değiştirirsen eklentinin eklediği eski baskı çıkarılır; önceden kitaplığında olan kitaplara dokunulmaz."),
             separator = true,
+        },
+        {
+            text = _("Alıntıları varsayılan olarak gizli paylaş"),
+            checked_func = function() return self.settings:isTrue("alinti_gizli") end,
+            callback = function() self.settings:flipTrue("alinti_gizli"); self.settings:flush() end,
+            help_text = _("Açıksa alıntı penceresi \"Gizli\" seçili açılır ve toplu gönderimde önce gizli seçenek gelir. Gizli alıntılar 1000Kitap'ta kitabın sayfasında yalnızca senin görebildiğin özel not olarak saklanır."),
         },
         { text = _("Renkle otomatik gönderim"), sub_item_table = self:renkMenusu() },
         {
