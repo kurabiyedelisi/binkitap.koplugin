@@ -7,8 +7,9 @@ dosyasının başında listelenmiştir.
 
 ## İndirme
 
-[Releases](../../releases) sayfasından son sürümün `binkitap.koplugin.zip` dosyasını indir ya da
-yeşil **Code → Download ZIP** ile depoyu indir; içindeki `binkitap.koplugin` klasörü eklentinin kendisidir.
+Bu sayfadaki yeşil **Code → Download ZIP** düğmesiyle depoyu indir ve aç. İçindeki
+`binkitap.koplugin` klasörü eklentinin kendisidir; Kobo'ya sadece onu kopyala.
+Önceki sürümler [Tags](../../tags) sayfasında.
 
 ## Kurulum
 
