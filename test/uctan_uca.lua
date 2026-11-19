@@ -1019,8 +1019,8 @@ do
 print("28) GitHub'dan güncelleme")
 local G = Plugin._guncelleme
 kontrol(Plugin.SURUM == "0.2.7", "sürüm _meta.lua'dan okundu: " .. tostring(Plugin.SURUM))
-kontrol(G.dahaYeni("0.2.10", "0.2.10") and G.dahaYeni("0.3", "0.2.10") and not G.dahaYeni("0.2.7", "0.2.7")
-  and not G.dahaYeni("0.2.2", "0.2.7"), "sürüm karşılaştırma sayıyla yapılıyor")
+kontrol(G.dahaYeni("1.2.10", "1.2.9") and G.dahaYeni("1.3", "1.2.9") and not G.dahaYeni("1.2.3", "1.2.3")
+  and not G.dahaYeni("1.2.2", "1.2.3"), "sürüm karşılaştırma sayıyla yapılıyor")
 local ayar_ogeleri = fm:ayarlarMenusu()
 local gun_oge, oto_oge
 for _, o in ipairs(ayar_ogeleri) do
