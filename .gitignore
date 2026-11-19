@@ -1,0 +1,4 @@
+# Hesap kodları: asla depoya girmesin
+ayar.lua
+*.zip
+.DS_Store

@@ -1,0 +1,1002 @@
+-- v0.2 uçtan uca testi: KOReader ve 1000Kitap sunucusu taklit edilir.
+local KOK = ((arg and arg[0]) or ""):match("^(.*)/test/[^/]*$") or "."
+local EKLENTI = KOK .. "/binkitap.koplugin"
+package.path = EKLENTI .. "/?.lua;" .. package.path
+
+local gercek_time = os.time
+local saat = 1795000000
+os.time = function(t) if t then return gercek_time(t) end return saat end
+local gercek_date = os.date
+os.date = function(f, t) return gercek_date(f, t or saat) end
+local function ilerlet(sn) saat = saat + sn end
+
+------------------------------------------------------------------ mini json
+local json = { null = setmetatable({}, { __tostring = function() return "null" end }) }
+function json.decode(s)
+  local i = 1
+  local function ws() i = s:find("[^%s]", i) or #s + 1 end
+  local val
+  local function str()
+    i = i + 1
+    local out = {}
+    while true do
+      local c = s:sub(i, i)
+      if c == '"' then i = i + 1; break end
+      if c == "\\" then
+        local n = s:sub(i + 1, i + 1)
+        local map = { n = "\n", t = "\t", r = "\r", b = "\b", f = "\f", ['"'] = '"', ["\\"] = "\\", ["/"] = "/" }
+        if n == "u" then out[#out + 1] = utf8.char(tonumber(s:sub(i + 2, i + 5), 16)); i = i + 6
+        else out[#out + 1] = map[n]; i = i + 2 end
+      else out[#out + 1] = c; i = i + 1 end
+    end
+    return table.concat(out)
+  end
+  function val()
+    ws()
+    local c = s:sub(i, i)
+    if c == "{" then
+      i = i + 1; local t = {}; ws()
+      if s:sub(i, i) == "}" then i = i + 1; return t end
+      while true do
+        ws(); local k = str(); ws(); i = i + 1
+        t[k] = val(); ws()
+        local d = s:sub(i, i); i = i + 1
+        if d == "}" then return t end
+      end
+    elseif c == "[" then
+      i = i + 1; local t = {}; ws()
+      if s:sub(i, i) == "]" then i = i + 1; return t end
+      while true do
+        t[#t + 1] = val(); ws()
+        local d = s:sub(i, i); i = i + 1
+        if d == "]" then return t end
+      end
+    elseif c == '"' then return str()
+    elseif s:sub(i, i + 3) == "true" then i = i + 4; return true
+    elseif s:sub(i, i + 4) == "false" then i = i + 5; return false
+    elseif s:sub(i, i + 3) == "null" then i = i + 4; return json.null
+    else
+      local num = s:match("^-?%d+%.?%d*[eE]?[-+]?%d*", i)
+      i = i + #num; return tonumber(num)
+    end
+  end
+  return val()
+end
+local function encode(v)
+  local t = type(v)
+  if v == nil or v == json.null then return "null" end
+  if t == "boolean" then return tostring(v) end
+  if t == "number" then return tostring(v) end
+  if t == "string" then
+    return '"' .. v:gsub('[%c"\\]', function(c)
+      if c == '"' then return '\\"' elseif c == "\\" then return "\\\\" elseif c == "\n" then return "\\n" end
+      return string.format("\\u%04x", c:byte())
+    end) .. '"'
+  end
+  if t == "table" then
+    if next(v) == nil then return (getmetatable(v) == "obj") and "{}" or "[]" end
+    if v[1] ~= nil then
+      local p = {}
+      for _, x in ipairs(v) do p[#p + 1] = encode(x) end
+      return "[" .. table.concat(p, ",") .. "]"
+    end
+    local p = {}
+    for k, x in pairs(v) do p[#p + 1] = encode(tostring(k)) .. ":" .. encode(x) end
+    return "{" .. table.concat(p, ",") .. "}"
+  end
+  error("encode " .. t)
+end
+package.preload["json"] = function() return json end
+
+------------------------------------------------------------------ sahte 1000Kitap
+local Y = require("binkitap_yardimci")
+local KITAPLAR = {
+  ["24319"] = { adi = "Walden", yazar = "Henry David Thoreau", yayinevi = "Zeplin Kitap", sayfa = 357, isbn = "9786054849789", yil = "2019" },
+  ["359215"] = { adi = "Walden", yazar = "Henry David Thoreau", yayinevi = "Can Yayınları", sayfa = 352, isbn = "9789750758928", yil = "2022" },
+  ["9517"] = { adi = "Kaos Lordu", yazar = "Robert Jordan", yayinevi = "İthaki", sayfa = 1080, isbn = "9786053751234", yil = "2021" },
+  ["700"] = { adi = "Dönüşüm", yazar = "Franz Kafka", yayinevi = "İş Bankası", sayfa = 80, isbn = "", yil = "2015" },
+  ["701"] = { adi = "Dönüşüm", yazar = "Franz Kafka", yayinevi = "Can Yayınları", sayfa = 96, isbn = "", yil = "2018" },
+  ["702"] = { adi = "Dönüşüm", yazar = "Ovidius", yayinevi = "Kabalcı", sayfa = 400, isbn = "", yil = "2010" },
+  ["800"] = { adi = "Gog", yazar = "Giovanni Papini", yayinevi = "Can", sayfa = 496, isbn = "", yil = "2016" },
+  ["801"] = { adi = "Şairin Romanı", yazar = "Murathan Mungan", yayinevi = "Metis", sayfa = 300, isbn = "", yil = "2001" },
+  ["900"] = { adi = "Yaşam Yolu 1", yazar = "Anton Makarenko", yayinevi = "Kaynak", sayfa = 420, isbn = "", yil = "2020" },
+  ["92807"] = { adi = "Shenzen", yazar = "Guy Delisle", yayinevi = "Karakarga", sayfa = 152, isbn = "", yil = "2014" },
+}
+-- 1000Kitap kitaplığı: Walden (Zeplin) aynı baskı, Dönüşüm (İş Bankası) başka baskı, Shenzen basılı kitap
+local KITAPLIK = { "24319", "700", "92807" }
+local function kitaplikta(id) for _, x in ipairs(KITAPLIK) do if x == id then return true end end return false end
+local SIRA = { "24319", "359215", "9517", "700", "701", "702", "800", "801", "900" }
+local durum, sayfa2, puan, notlar, alintilar, incelemeler, seanslar, hedefler = {}, {}, {}, {}, {}, {}, {}, {}
+local OKUYACAKLAR = { "800", "801", "700", "900" }
+local OTURUM = "11111111-2222-3333-4444-555555555555"
+local CIHAZ = "CIHAZKODU123456"
+local istekler = {}
+local ag_acik = true
+local sunucu_kapali = false
+
+local function kimlikli(r) return r.headers["1-oturum-kodu"] == OTURUM and r.headers["1-cihaz-kodu"] == CIHAZ end
+local function giris_hatasi() return { hata = 1, hataTuru = 1, hataMesaji = "Lütfen giriş yapınız.", alertMesaji = "" } end
+local function obj(t) return setmetatable(t or {}, { __metatable = "obj" }) end
+
+local function aramaSonucu(q)
+  local sonuc = { { id = 0, name = q, turu = "etiket", icerik = { id = "9", adi = q } } }
+  local temiz = q:gsub("[%-%s]", "")
+  for _, id in ipairs(SIRA) do
+    local k = KITAPLAR[id]
+    if k.isbn ~= "" and k.isbn == temiz then
+      sonuc[#sonuc + 1] = { id = 1, name = k.adi, turu = "kitap", icerik = { id = id, adi = k.adi, yazarAdi = k.yazar ~= "" and k.yazar or json.null } }
+      return sonuc
+    end
+  end
+  for _, id in ipairs(SIRA) do
+    local k = KITAPLAR[id]
+    local metin = Y.normal(k.adi .. k.yazar)
+    local hepsi = true
+    for kelime in q:gmatch("%S+") do
+      if not metin:find(Y.normal(kelime), 1, true) then hepsi = false break end
+    end
+    if hepsi then
+      sonuc[#sonuc + 1] = { id = #sonuc, name = k.adi, turu = "kitap", icerik = { id = id, adi = k.adi, yazarAdi = k.yazar ~= "" and k.yazar or json.null } }
+    end
+  end
+  sonuc[#sonuc + 1] = { id = 99, name = "Biri", turu = "yazar", icerik = { id = "4148", adi = "Biri" } }
+  return sonuc
+end
+
+local YANIT = {}
+YANIT["diger/arama"] = function(r) return { _sonuc = { sonuclar = aramaSonucu(r.q.q), kelime = r.q.q }, bilgi = 1, bilgiMesaji = "" } end
+YANIT["kitaplar/kitapCek"] = function(r)
+  local k = KITAPLAR[r.q.id]
+  if not k then return { hata = 1, hataMesaji = "Kitap yok" } end
+  if r.q.bolum == "alintilar" then
+    return { _sonuc = { liste = {
+      { turu = "sozler", begeniSayisi = 489, uye = { adi = "Ersin Yaman" }, alt = { sozler = { kitapid = r.q.id, sayfa = "12", sozParse = { parse = { "Kim bilir kaç insan ", "bir kitabı okuyup..." } } } } },
+      { turu = "reklam" },
+      { turu = "sozler", begeniSayisi = 10, uye = { adi = "Ayşe" }, alt = { sozler = { kitapid = r.q.id, sayfa = "0", sozParse = { parse = { "İkinci alıntı" } } } } },
+    }, hasMore = true }, bilgi = 1 }
+  end
+  return { _sonuc = {
+    kitap = { id = r.q.id, adi = k.adi, yazarAdi = k.yazar, puan = "7.8", puan_kisiDuz = "596", okuduDuz = "1911", begeniDuz = "545", alintiSayisiDuz = "9526", incelemeSayisiDuz = "127", isbn = k.isbn },
+    liste = { { hakkinda = { baskiBilgileri = { yayinevi = k.yayinevi, isbn = k.isbn, sayfaSayisi = tostring(k.sayfa), baskiYili = k.yil } } },
+              { fiyatlar = { { baskiBilgileriArray = { sayfaSayisi = "999", yayinevi = "Yanlış" } } } } },
+  }, bilgi = 1 }
+end
+YANIT["kitaplar/basimlar"] = function(r)
+  local sayfa = tonumber(r.q.sayfa)
+  local ids = sayfa == 1 and { "24319", "359215" } or { "9517" }
+  local liste = {}
+  for _, id in ipairs(ids) do
+    local k = KITAPLAR[id]
+    liste[#liste + 1] = { id = id, adi = k.adi, baskiBilgileriArray = { yayinevi = k.yayinevi, sayfaSayisi = tostring(k.sayfa), isbn = k.isbn, baskiYili = k.yil } }
+  end
+  return { _sonuc = { hasMore = sayfa == 1, kume = 4973230052879385, z = 10, sayfa = sayfa, liste = liste }, bilgi = 1 }
+end
+YANIT["uye/kitap/modalVeBasimlar"] = function(r)
+  if not kimlikli(r) then return giris_hatasi() end
+  local id = r.q.kitapId
+  local d = durum[id] or -1
+  local k = KITAPLAR[id] or { sayfa = 100 }
+  return { _sonuc = {
+    basimlar = { { id = id, okumaDurumuButon = { yazi = "x", durum = "0", okumaDurumu = d } } },
+    modal = { okumaSayi = tostring(d), okumaId = (d >= 0) and ("OK" .. id) or "", okumalar = {}, kutuphaneDurum = kitaplikta(id),
+      sayfaVeri = { sayfa = tostring(k.sayfa), sayfa2 = tostring(sayfa2[id] or 0) }, puan = puan[id] or 0 },
+  }, bilgi = 1 }
+end
+YANIT["kitaplar/kitapOku"] = function(r)
+  if not kimlikli(r) then return giris_hatasi() end
+  durum[r.q.id] = tonumber(r.q.durum)
+  return { _sonuc = { durum = true }, bilgi = 1 }
+end
+YANIT["kitaplar/kitapPuanVer"] = function(r) puan[r.q.id] = tonumber(r.q.puan); return { _sonuc = {}, bilgi = 1 } end
+YANIT["kitaplar/kitapSayfaGuncelle"] = function(r)
+  assert(r.q.okumaId == "OK" .. r.q.id, "okumaId")
+  sayfa2[r.q.id] = tonumber(r.q.sayfa2)
+  return { _sonuc = {}, bilgi = 1 }
+end
+YANIT["alintilar/alintiEkle"] = function(r)
+  if not kimlikli(r) then return giris_hatasi() end
+  if r.form.soz == "TEKRAR" then return { hata = 1, hataTuru = 2, hataMesaji = "Bu alıntı daha önce eklenmiş.", alertMesaji = "" } end
+  alintilar[#alintilar + 1] = r.form
+  return { _sonuc = { id = "999" }, bilgi = 1 }
+end
+YANIT["koleksiyonlar/not-ayarla"] = function(r) notlar[#notlar + 1] = r.form; return { _sonuc = {}, bilgi = 1 } end
+YANIT["kitaplar/kitapIncelemeKaydet"] = function(r) incelemeler[#incelemeler + 1] = { q = r.q, form = r.form }; return { _sonuc = {}, bilgi = 1 } end
+YANIT["uyeler/okumalar/gunluk/seansTamamla"] = function(r) seanslar[#seanslar + 1] = r.form; return { _sonuc = {}, bilgi = 1 } end
+YANIT["diger/okumaHedefiKaydet"] = function(r) hedefler[r.form.sene] = tonumber(r.form.hedef); return { _sonuc = {}, bilgi = 1 } end
+YANIT["okuma-hedefleri/sene-detay"] = function(r)
+  local h = hedefler[r.q.sene]
+  if not h then return { _sonuc = {}, bilgi = 1 } end
+  return { _sonuc = { hedef = h, okunanKitapSayisi = 4 }, bilgi = 1 }
+end
+YANIT["kitaplar/kitapKutuphanemeEkle"] = function(r)
+  if not kimlikli(r) then return giris_hatasi() end
+  local id = r.q.id
+  if r.q.forceEkle == "1" then
+    if not kitaplikta(id) then KITAPLIK[#KITAPLIK + 1] = id end
+  elseif kitaplikta(id) then
+    for i = #KITAPLIK, 1, -1 do if KITAPLIK[i] == id then table.remove(KITAPLIK, i) end end
+  else
+    KITAPLIK[#KITAPLIK + 1] = id
+  end
+  return { _sonuc = { durum = kitaplikta(id) }, bilgi = 1 }
+end
+YANIT["uyeler/kitaplar/liste"] = function(r)
+  assert(r.q.kadi == "ornek_okur", "raf kadi")
+  if r.q.raf == "kutuphanesi" then
+    local liste = {}
+    for _, id in ipairs(KITAPLIK) do
+      local k = KITAPLAR[id]
+      liste[#liste + 1] = { id = id, adi = k.adi, yazarAdi = k.yazar, sayfaSayisi = tostring(k.sayfa) }
+    end
+    return { _sonuc = { hasMore = false, kume = 1, z = 1, sayfa = 1, liste = liste }, bilgi = 1 }
+  end
+  assert(r.q.raf == "okuyacaklari", "raf params")
+  local sayfa = tonumber(r.q.sayfa)
+  if sayfa == 2 then assert(r.q.kume == "4973230052879385" and r.q.z == "10", "kume/z") end
+  local ids = sayfa == 1 and { OKUYACAKLAR[1], OKUYACAKLAR[2] } or { OKUYACAKLAR[3], OKUYACAKLAR[4] }
+  local liste = {}
+  for _, id in ipairs(ids) do
+    local k = KITAPLAR[id]
+    liste[#liste + 1] = { id = id, adi = k.adi, yazarAdi = k.yazar, sayfaSayisi = tostring(k.sayfa) }
+  end
+  liste[#liste + 1] = { renderTuru = "reklam", id = "x", adi = "reklam" }
+  return { _sonuc = { hasMore = sayfa == 1, kume = 4973230052879385, z = 10, sayfa = sayfa, liste = liste }, bilgi = 1 }
+end
+YANIT["okurlar/okurCekV2"] = function(r)
+  assert(r.q.bolum == "alintilar")
+  local sayfa = tonumber(r.q.sayfa)
+  return { _sonuc = { hasMore = sayfa == 1, kume = 1, z = 1, sayfa = sayfa, liste = {
+    { turu = "sozler", alt = { sozler = { kitapid = "9477", sozParse = { parse = { "Alıntı " .. sayfa .. " %50" } } } } },
+    { turu = "reklam" },
+  } }, bilgi = 1 }
+end
+YANIT["konular/konuArama"] = function(r) return { _sonuc = { sinir = 10, liste = { { id = "24", adi = "Felsefe" }, { id = "3498", adi = "Felsefe ve Düşünce" } } }, bilgi = 1 } end
+YANIT["kitaplar/tanidikOkurlar"] = function(r)
+  assert(r.host == "analiz.1000kitap.com", "analiz host")
+  return { _sonuc = { liste = { { uye = { adi = "Gökhan", kadi = "gokhan", resim = "x" } }, { uye = { adi = "Ece", kadi = "ece", resim = "y" } } } }, bilgi = 1 }
+end
+
+local function urldecode(s) return (s:gsub("+", " "):gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end)) end
+local function parseq(s)
+  local t = {}
+  for k, v in (s or ""):gmatch("([^&=]+)=([^&]*)") do t[urldecode(k)] = urldecode(v) end
+  return t
+end
+
+local function fake_request(reqt)
+  local body
+  if reqt.source then
+    local parts = {}
+    while true do local c = reqt.source(); if not c then break end; parts[#parts + 1] = c end
+    body = table.concat(parts)
+  end
+  local host, yol, qs = reqt.url:match("^https://([^/]+)/v2/([^?]+)%??(.*)$")
+  local r = { method = reqt.method, url = reqt.url, host = host, yol = yol, q = parseq(qs), headers = reqt.headers, body = body, form = parseq(body) }
+  istekler[#istekler + 1] = r
+  if not ag_acik then return nil, "network unreachable" end
+  local code, resp = 200, nil
+  if sunucu_kapali then code, resp = 503, "x"
+  else
+    local f = YANIT[yol]
+    if f then resp = encode(f(r)) else code, resp = 404, "yok" end
+  end
+  reqt.sink(resp); reqt.sink(nil)
+  return 1, code, { ["content-type"] = "application/json" }, "HTTP/1.1 " .. code
+end
+local function istekSay(yol, kosul)
+  local n = 0
+  for _, r in ipairs(istekler) do if r.yol == yol and (not kosul or kosul(r)) then n = n + 1 end end
+  return n
+end
+local function sonIstek(yol)
+  for i = #istekler, 1, -1 do if istekler[i].yol == yol then return istekler[i] end end
+end
+
+package.preload["socket.http"] = function() return { request = fake_request } end
+package.preload["ssl.https"] = function() return { request = fake_request } end
+package.preload["socket"] = function() return { skip = function(n, ...) return select(n + 1, ...) end } end
+package.preload["ltn12"] = function()
+  return {
+    source = { string = function(s) local done = false; return function() if done then return nil end; done = true; return s end end },
+    sink = { table = function(t) return function(c) if c then t[#t + 1] = c end; return 1 end end },
+  }
+end
+package.preload["socketutil"] = function() return { set_timeout = function() end, reset_timeout = function() end } end
+local loglar = {}
+package.preload["logger"] = function()
+  local function l(...) local t = {} for i = 1, select("#", ...) do t[#t + 1] = tostring((select(i, ...))) end; loglar[#loglar + 1] = table.concat(t, " ") end
+  return { warn = l, info = l, err = l, dbg = l }
+end
+
+------------------------------------------------------------------ UI taklidi
+local gosterilen, zamanlanan = {}, {}
+local function widget(tur)
+  local W = {}
+  function W:new(o) o = o or {}; o._tur = tur; setmetatable(o, { __index = W }); return o end
+  function W:onShowKeyboard() end
+  function W:getInputText() return self._girdi or self.input end
+  function W:getFields() local t = {}; for i, f in ipairs(self.fields) do t[i] = (self._alanlar and self._alanlar[i]) or f.text end; return t end
+  function W:switchItemTable(_, items) self.item_table = items end
+  return W
+end
+for _, ad in ipairs({ "buttondialog", "confirmbox", "infomessage", "inputdialog", "multiinputdialog", "menu", "textviewer" }) do
+  local tur = ({ buttondialog = "ButtonDialog", confirmbox = "ConfirmBox", infomessage = "InfoMessage", inputdialog = "InputDialog",
+    multiinputdialog = "MultiInputDialog", menu = "Menu", textviewer = "TextViewer" })[ad]
+  package.preload["ui/widget/" .. ad] = function() return widget(tur) end
+end
+package.preload["ui/uimanager"] = function()
+  return {
+    show = function(_, w) gosterilen[#gosterilen + 1] = w end,
+    close = function(_, w) if w then w._kapandi = true end end,
+    scheduleIn = function(_, s, f) zamanlanan[#zamanlanan + 1] = f end,
+    forceRePaint = function() end,
+  }
+end
+local network = { online = true, wifi_acildi = 0, wifi_kapandi = 0 }
+package.preload["ui/network/manager"] = function()
+  return {
+    isOnline = function() return network.online end,
+    runWhenOnline = function(_, cb) if network.online then cb() else network.bekleyen = cb end end,
+    turnOnWifiAndWaitForConnection = function(_, cb) network.wifi_acildi = network.wifi_acildi + 1; network.online = true; ag_acik = true; cb() end,
+    turnOffWifi = function() network.wifi_kapandi = network.wifi_kapandi + 1; network.online = false end,
+  }
+end
+package.preload["datastorage"] = function() return { getSettingsDir = function() return "/tmp" end } end
+local function yeniAyarlar()
+  local S = {}
+  function S:open() local o = { data = {} }; setmetatable(o, { __index = S }); return o end
+  function S:readSetting(k) return self.data[k] end
+  function S:saveSetting(k, v) self.data[k] = v end
+  function S:delSetting(k) self.data[k] = nil end
+  function S:flush() end
+  function S:nilOrTrue(k) return self.data[k] == nil or self.data[k] == true end
+  function S:isTrue(k) return self.data[k] == true end
+  function S:makeTrue(k) self.data[k] = true end
+  function S:flipNilOrTrue(k) if self:nilOrTrue(k) then self.data[k] = false else self.data[k] = nil end end
+  function S:flipTrue(k) self.data[k] = not self:isTrue(k) end
+  return S
+end
+local LuaSettings = yeniAyarlar()
+package.preload["luasettings"] = function() return LuaSettings end
+G_reader_settings = LuaSettings:open()
+G_reader_settings:saveSetting("home_dir", "/kobo")
+package.preload["ui/widget/container/widgetcontainer"] = function()
+  return { extend = function(_, o) o.new = function(cls, inst) setmetatable(inst, { __index = cls }); if inst.init then inst:init() end; return inst end; return o end }
+end
+package.preload["gettext"] = function() return function(s) return s end end
+package.preload["ffi/util"] = function()
+  return { template = function(s, ...) local p = { ... }; return (s:gsub("%%(%d)", function(i) return tostring(p[tonumber(i)]) end)) end }
+end
+local eylemler = {}
+package.preload["dispatcher"] = function() return { registerAction = function(_, ad, t) eylemler[ad] = t end } end
+package.preload["device"] = function() return { home_dir = "/kobo" } end
+
+-- dosya sistemi
+local FS = {
+  ["/kobo"] = { "Walden - Thoreau.epub", "Kafka", "notlar.txt.sdr", ".gizli", "Gog.epub", "resim.jpg" },
+  ["/kobo/Kafka"] = { "Donusum.epub", "Bilinmeyen.epub", "Sairin Romani.epub" },
+}
+local DOSYALAR = {}
+local function fsEkle()
+  for dizin, adlar in pairs(FS) do
+    for _, ad in ipairs(adlar) do
+      local yol = dizin .. "/" .. ad
+      if not FS[yol] then DOSYALAR[yol] = true end
+    end
+  end
+end
+fsEkle()
+package.preload["libs/libkoreader-lfs"] = function()
+  return {
+    dir = function(d)
+      local adlar = FS[d]
+      if not adlar then error("dir yok " .. d) end
+      local i = 0
+      return function() i = i + 1; return adlar[i] end, nil
+    end,
+    attributes = function(yol, alan)
+      if FS[yol] or yol:match("%.sdr$") then return "directory" end
+      if DOSYALAR[yol] then return "file" end
+      return nil
+    end,
+  }
+end
+package.preload["document/documentregistry"] = function()
+  return { hasProvider = function(_, yol) return yol:match("%.epub$") ~= nil or yol:match("%.pdf$") ~= nil end }
+end
+local YAN_DOSYALAR = {
+  ["/kobo/Walden - Thoreau.epub"] = { doc_props = { title = "Walden", authors = "Henry David Thoreau", identifiers = "uuid:abc\nisbn:978-975-07-5892-8" } },
+  ["/kobo/Kafka/Donusum.epub"] = { doc_props = { title = "Dönüşüm", authors = "Franz Kafka" } },
+  ["/kobo/Kafka/Bilinmeyen.epub"] = { doc_props = { title = "Hiç Olmayan Kitap", authors = "Kimse" } },
+}
+package.preload["docsettings"] = function()
+  return {
+    hasSidecarFile = function(_, yol) return YAN_DOSYALAR[yol] ~= nil end,
+    open = function(_, yol) local d = YAN_DOSYALAR[yol]; return { readSetting = function(_, k) return d[k] end } end,
+  }
+end
+local acilan
+package.preload["apps/reader/readerui"] = function() return { showReader = function(_, yol) acilan = yol end } end
+local RC = { coll = {}, yazildi = 0 }
+function RC:addCollection(ad) self.coll[ad] = {} end
+function RC:addItem(yol, ad) self.coll[ad][yol] = { file = yol } end
+function RC:isFileInCollection(yol, ad) return self.coll[ad] and self.coll[ad][yol] ~= nil end
+function RC:removeItem(yol, ad) self.coll[ad][yol] = nil end
+function RC:write() self.yazildi = self.yazildi + 1 end
+package.preload["readcollection"] = function() return RC end
+local FileManager = { file_dialog_added_buttons = nil }
+function FileManager:addFileDialogButtons(id, f)
+  self.file_dialog_added_buttons = self.file_dialog_added_buttons or { index = {} }
+  if self.file_dialog_added_buttons.index[id] == nil then
+    table.insert(self.file_dialog_added_buttons, f)
+    self.file_dialog_added_buttons.index[id] = #self.file_dialog_added_buttons
+  end
+end
+function FileManager:removeFileDialogButtons(id)
+  local idx = self.file_dialog_added_buttons and self.file_dialog_added_buttons.index[id]
+  if idx then table.remove(self.file_dialog_added_buttons, idx); self.file_dialog_added_buttons.index[id] = nil end
+end
+package.preload["apps/filemanager/filemanager"] = function() return FileManager end
+
+-- Tanımsız global kullanımı hata versin
+setmetatable(_G, { __newindex = function(_, k) error("global atama: " .. tostring(k), 2) end,
+                   __index = function(_, k) error("tanımsız global: " .. tostring(k), 2) end })
+
+------------------------------------------------------------------ yardımcılar
+local function son(tur)
+  for i = #gosterilen, 1, -1 do if gosterilen[i]._tur == tur and not gosterilen[i]._kapandi then return gosterilen[i] end end
+end
+local function dugme(w, metin)
+  for _, satir in ipairs(w.buttons) do for _, b in ipairs(satir) do if b.text == metin or (b.text and b.text:find(metin, 1, true) == 1) then return b end end end
+  local t = {}
+  for _, satir in ipairs(w.buttons) do for _, b in ipairs(satir) do t[#t + 1] = b.text end end
+  error("düğme yok: " .. metin .. " | var: " .. table.concat(t, " / "))
+end
+local function calistir()
+  local n = 0
+  while #zamanlanan > 0 do local f = table.remove(zamanlanan, 1); f(); n = n + 1; assert(n < 500, "sonsuz zamanlama") end
+end
+local function menuSec(menu, kosul)
+  for _, it in ipairs(menu.item_table) do
+    if kosul(it) then return menu.onMenuSelect(menu, it) end
+  end
+  error("menü öğesi yok")
+end
+local hatalar = 0
+local function kontrol(kosul, ad)
+  print((kosul and "  ✓ " or "  ✗ ") .. ad)
+  if not kosul then hatalar = hatalar + 1 end
+end
+
+------------------------------------------------------------------ eklenti
+local Plugin = dofile(EKLENTI .. "/main.lua")
+local Api = Plugin.Api
+
+local function docSettings(veri)
+  local d = { data = veri or {} }
+  function d:readSetting(k) return self.data[k] end
+  function d:saveSetting(k, v) self.data[k] = v end
+  function d:flush() end
+  return d
+end
+
+local function yeniOkuyucu(dosya, props, toplam_sayfa, annotations)
+  local ui = {
+    menu = { registerToMainMenu = function() end },
+    highlight = { addToHighlightDialog = function(this, id, fn) this._dugme = { id = id, fn = fn } end },
+    document = {
+      file = dosya,
+      getPageCount = function() return toplam_sayfa end,
+      getPageFromXPointer = function(_, xp) return tonumber(xp:match("DocFragment%[(%d+)%]")) * 20 end,
+      getProps = function() return props end,
+    },
+    doc_settings = docSettings(),
+    doc_props = { display_title = props.title, authors = props.authors },
+    rolling = true,
+    sayfa = 1,
+    annotation = { annotations = annotations or {} },
+  }
+  ui.getCurrentPage = function() return ui.sayfa end
+  return ui
+end
+
+print("1) Kurulum")
+local fm_ui = { menu = { registerToMainMenu = function() end } }
+local fm = Plugin:new{ ui = fm_ui }
+FileManager.instance = { file_chooser = { path = "/kobo/Kafka" } }
+kontrol(eylemler.binkitap_simdi_gonder and eylemler.binkitap_ne_okusam, "hareket eylemleri kaydedildi")
+kontrol(FileManager.file_dialog_added_buttons and #FileManager.file_dialog_added_buttons == 1, "dosya menüsü düğmesi eklendi")
+fm:kimlikPenceresi()
+local kd = son("MultiInputDialog")
+kd._alanlar = { OTURUM, CIHAZ, "@ornek_okur" }
+dugme(kd, "Kaydet").callback()
+kontrol(Api:kimlikVar() and fm.kullanici_adi == "ornek_okur", "hesap ve kullanıcı adı (@ atılarak) kaydedildi")
+local fm2 = Plugin:new{ ui = fm_ui }
+kontrol(#FileManager.file_dialog_added_buttons == 1, "ikinci örnek düğmeyi çoğaltmadı")
+kontrol(fm2.settings == fm.settings, "ayarlar örnekler arasında ortak")
+
+print("2) Okuyucu: ISBN'den sormadan eşleştirme + otomatik Okuyorum")
+local okuyucu_ui = yeniOkuyucu("/kobo/Walden - Thoreau.epub",
+  { title = "Walden", authors = "Henry David Thoreau", identifiers = "uuid:1\nisbn:978-975-07-5892-8" }, 400)
+local p = Plugin:new{ ui = okuyucu_ui }
+kontrol(okuyucu_ui.highlight._dugme.id == "12_binkitap", "vurgu menüsü düğmesi")
+p:onReaderReady(); calistir()
+local k = okuyucu_ui.doc_settings.data.binkitap
+kontrol(k and k.id == "359215", "ISBN ile doğru baskı (Can Yayınları) eşleşti")
+kontrol(k and k.yayinevi == "Can Yayınları" and k.basili_sayfa == 352, "yayınevi ve basılı sayfa kaydedildi")
+kontrol(durum["359215"] == 2, "1000Kitap'ta Okuyorum yapıldı")
+kontrol(fm:dosyaEslesmesi("/kobo/Walden - Thoreau.epub").id == "359215", "eşleşme dosya tarayıcısı için de kaydedildi")
+
+print("3) Aramada yayınevi gösterimi ve önbellek")
+local once = istekSay("kitaplar/kitapCek")
+p:aramaYap("Dönüşüm", function() end)
+local liste = son("ButtonDialog")
+local etiketler = {}
+for _, satir in ipairs(liste.buttons) do etiketler[#etiketler + 1] = satir[1].text end
+kontrol(etiketler[1] == "Dönüşüm — Franz Kafka · İş Bankası, 2015", "etiket: " .. etiketler[1])
+kontrol(etiketler[2] == "Dönüşüm — Franz Kafka · Can Yayınları, 2018", "etiket: " .. etiketler[2])
+kontrol(etiketler[3] == "Dönüşüm — Ovidius · Kabalcı, 2010", "etiket: " .. etiketler[3])
+kontrol(istekSay("kitaplar/kitapCek") - once == 3, "3 sonuç için yayınevi soruldu")
+p:aramaYap("Dönüşüm", function() end)
+kontrol(istekSay("kitaplar/kitapCek") - once == 3, "ikinci aramada önbellekten geldi")
+
+print("4) Baskı değiştirme (sayfalı liste)")
+p:baskiSec()
+local bd = son("ButtonDialog")
+kontrol(bd.buttons[2][1].text:find("^✓ Walden — Can Yayınları, 2022, 352 sayfa") ~= nil, "mevcut baskı işaretli: " .. bd.buttons[2][1].text)
+dugme(bd, "Daha fazla").callback()
+bd = son("ButtonDialog")
+kontrol(#bd.buttons == 4, "ikinci sayfayla 3 baskı listelendi")
+bd.buttons[1][1].callback()
+k = okuyucu_ui.doc_settings.data.binkitap
+kontrol(k.id == "24319" and k.basili_sayfa == 357 and k.yayinevi == "Zeplin Kitap", "baskı Zeplin olarak değişti")
+durum["24319"] = 2
+
+print("5) Alıntı: konu ve yorum izni; özel not")
+okuyucu_ui.highlight._dugme.fn({ selected_text = { text = "Ormana gittim.", pos0 = "/body/DocFragment[5]/body/p[3]/text().0" }, onClose = function() end }).callback()
+local ap = son("ButtonDialog")
+kontrol(ap.title:find("Sayfa: 89", 1, true) ~= nil, "sayfa 100/400*357 ≈ 89")
+dugme(ap, "Konu").callback()
+local kara = son("InputDialog"); kara._girdi = "felsefe"
+dugme(kara, "Ara").callback()
+son("ButtonDialog").buttons[1][1].callback()
+ap = son("ButtonDialog")
+kontrol(ap.title:find("Konu: Felsefe", 1, true) ~= nil, "konu seçildi")
+dugme(ap, "Yorumlar").callback()
+dugme(son("ButtonDialog"), "○ Hiç kimse").callback()
+ap = son("ButtonDialog")
+kontrol(ap.title:find("Yorumlar: Hiç kimse", 1, true) ~= nil, "yorum izni seçildi")
+dugme(ap, "Gönder").callback(); calistir()
+local a = alintilar[#alintilar]
+kontrol(a and a.soz == "Ormana gittim." and a.konuId == "24" and a.yorumAyari == "6" and a.kitapid == "24319" and a.sayfa == "89", "alintiEkle: konuId=24, yorumAyari=6")
+kontrol(p.settings:readSetting("yorum_ayari") == 6, "yorum izni sonraki alıntılar için hatırlandı")
+okuyucu_ui.highlight._dugme.fn({ selected_text = { text = "Gizli düşünce", pos0 = "/body/DocFragment[10]/body/p[1]/text().0" }, onClose = function() end }).callback()
+ap = son("ButtonDialog")
+dugme(ap, "Not").callback()
+local nd = son("InputDialog"); nd._girdi = "bana not"
+dugme(nd, "Tamam").callback()
+dugme(son("ButtonDialog"), "Özel not yap").callback()
+ap = son("ButtonDialog")
+kontrol(ap.title:find("Özel not olarak gidecek", 1, true) ~= nil, "özel not modu")
+dugme(ap, "Gönder").callback(); calistir()
+local n = notlar[#notlar]
+kontrol(n and n.hedefTuru == "kitap" and n.hedefId == "24319" and n["not"] == "“Gizli düşünce” (s. 179)\n\nbana not" and #n.notAnahtari == 16 and n.surum == "0" and n.notId == "", "not-ayarla gövdesi doğru")
+
+print("6) Renkle otomatik gönderim")
+p.settings:saveSetting("renk_eylemleri", { yellow = "alinti", blue = "ozel" })
+local ann = okuyucu_ui.annotation.annotations
+ann[#ann + 1] = { datetime = "2001-01-01 10:00:00", drawer = "lighten", color = "yellow", text = "eski vurgu", page = "/body/DocFragment[3]/body/p[1]/text().0" }
+local onceki_alinti = #alintilar
+ilerlet(5)
+ann[#ann + 1] = { datetime = os.date("%Y-%m-%d %H:%M:%S", saat + 3600), drawer = "lighten", color = "yellow", text = "yeni sarı", page = "/body/DocFragment[6]/body/p[1]/text().0" }
+ann[#ann + 1] = { datetime = os.date("%Y-%m-%d %H:%M:%S", saat + 3601), drawer = "lighten", color = "blue", text = "yeni mavi", note = "n", page = "/body/DocFragment[7]/body/p[1]/text().0" }
+ann[#ann + 1] = { datetime = os.date("%Y-%m-%d %H:%M:%S", saat + 3602), drawer = "lighten", color = "red", text = "kırmızı", page = "/body/DocFragment[8]/body/p[1]/text().0" }
+local onceki_not = #notlar
+p:onAnnotationsModified(); calistir()
+kontrol(#alintilar == onceki_alinti + 1 and alintilar[#alintilar].soz == "yeni sarı", "sarı vurgu alıntı olarak gitti, eski vurgu gitmedi")
+kontrol(#notlar == onceki_not + 1 and notlar[#notlar]["not"]:find("yeni mavi", 1, true), "mavi vurgu özel not olarak gitti")
+p:onAnnotationsModified(); calistir()
+kontrol(#alintilar == onceki_alinti + 1, "aynı vurgu ikinci kez gönderilmedi")
+
+print("7) Vurguları seçerek gönder")
+ann[#ann + 1] = { datetime = "2001-01-02 10:00:00", drawer = "lighten", color = "red", text = "elle bir", page = "/body/DocFragment[9]/body/p[1]/text().0" }
+p:topluGonder()
+local tg = son("ButtonDialog")
+kontrol(tg.title:find("gönderilmemiş 3 vurgu", 1, true) ~= nil, "3 gönderilmemiş vurgu: " .. tg.title)
+dugme(tg, "Seçerek gönder").callback()
+local menu = son("Menu")
+menuSec(menu, function(it) return it.text and it.text:find("elle bir", 1, true) end)
+kontrol(menu.item_table[1].text == "Seçilenleri gönder (1)", "sayaç güncellendi")
+onceki_alinti = #alintilar
+menuSec(menu, function(it) return it.eylem == "onay" end); calistir()
+kontrol(#alintilar == onceki_alinti + 1 and alintilar[#alintilar].soz == "elle bir", "sadece seçilen gönderildi")
+p:topluGonder()
+kontrol(son("ButtonDialog").title:find("gönderilmemiş 2 vurgu", 1, true) ~= nil, "gönderilen tekrar sayılmadı")
+dugme(son("ButtonDialog"), "Vazgeç").callback()
+
+print("8) İlerleme her %10'da ve okuma seansı")
+p.settings:saveSetting("ilerleme_modu", "yuzde10")
+p.settings:saveSetting("seans_kaydi", true)
+p:seansBaslat()
+okuyucu_ui.sayfa = 30; ilerlet(100); p:onPageUpdate(); calistir()
+kontrol(sayfa2["24319"] == nil, "%7.5'te ilerleme gönderilmedi")
+okuyucu_ui.sayfa = 45; ilerlet(100); p:onPageUpdate(); calistir()
+kontrol(sayfa2["24319"] == 40, "%11'de sayfa 40/357 gönderildi (" .. tostring(sayfa2["24319"]) .. ")")
+okuyucu_ui.sayfa = 50; ilerlet(1000); p:onPageUpdate(); calistir()
+kontrol(sayfa2["24319"] == 40, "aynı dilimde tekrar gönderilmedi")
+ilerlet(40)
+local onceki_seans = #seanslar
+p:onSuspend(); calistir()
+-- 100+100+300(üst sınır)+40 = 540 sn
+kontrol(#seanslar == onceki_seans, "uykuda seans sıraya alındı ama ağ beklemeden gönderilmedi")
+p:kuyruguGonder(true); calistir()
+local s = seanslar[#seanslar]
+kontrol(s and s.okumaId == "OK24319" and s.sureSaniye == "540" and s.bitisSayfasi == "45" and s.istemciKodu:match("^W2%-%w+$") and #s.istemciKodu == 15, "seansTamamla: 540 sn, sayfa 45")
+p:onResume()
+ilerlet(30); p:onCloseDocument(); calistir()
+kontrol(#seanslar == onceki_seans + 1, "1 dakikadan kısa seans gönderilmedi")
+
+print("9) KOReader durum senkronu")
+okuyucu_ui.doc_settings.data.summary = { status = "reading" }
+p:koDurumuKontrol()
+kontrol(okuyucu_ui.doc_settings.data.binkitap.son_ko_durum == "reading", "ilk görüş sadece kaydedildi")
+okuyucu_ui.doc_settings.data.summary = { status = "abandoned" }
+p:onCloseDocument(); calistir()
+kontrol(durum["24319"] == 3, "Beklemede → Yarım bıraktım")
+
+print("10) Bitiş ekranı: Okudum + puan + inceleme")
+p:onEndOfBook()
+local be = son("ButtonDialog")
+dugme(be, "Puan ver").callback()
+dugme(son("ButtonDialog"), "8").callback()
+dugme(son("ButtonDialog"), "İnceleme yaz").callback()
+local ig = son("InputDialog"); ig._girdi = "  Güzel kitap. "
+dugme(ig, "Tamam").callback()
+be = son("ButtonDialog")
+kontrol(be.title:find("Puan: 8", 1, true) and be.title:find("İnceleme: Güzel kitap.", 1, true), "bitiş ekranı özeti")
+dugme(be, "Kaydet").callback(); calistir()
+kontrol(durum["24319"] == 1 and puan["24319"] == 8, "Okudum ve puan 8")
+local inc = incelemeler[#incelemeler]
+kontrol(inc and inc.q.kitapId == "24319" and inc.q.id == "24319" and inc.form.inceleme == "Güzel kitap." and inc.form.isYeni == "1" and inc.form.kitapYeniKonuAdlari == "[]" and inc.form.yorumAyari == "6", "kitapIncelemeKaydet doğru")
+p:onEndOfBook()
+kontrol(son("ButtonDialog") == nil or son("ButtonDialog") ~= be, "bitiş ekranı ikinci kez açılmadı")
+okuyucu_ui.doc_settings.data.summary = { status = "complete" }
+local oku_once = istekSay("kitaplar/kitapOku")
+p:koDurumuKontrol(); calistir()
+kontrol(istekSay("kitaplar/kitapOku") == oku_once, "zaten Okudum: tekrar gönderilmedi (toggle riski yok)")
+
+print("11) Dosya menüsü (uzun basma)")
+local row = FileManager.file_dialog_added_buttons[1]("/kobo/Kafka/Donusum.epub", true, nil)
+kontrol(row and row[1].text == "1000Kitap", "kitap dosyasında düğme var")
+kontrol(FileManager.file_dialog_added_buttons[1]("/kobo/resim.jpg", true, nil) == nil, "resimde düğme yok")
+FileManager.instance.file_chooser.file_dialog = { _tur = "fd" }
+row[1].callback()
+kontrol(FileManager.instance.file_chooser.file_dialog._kapandi, "uzun basma penceresi kapatıldı")
+local dm = son("ButtonDialog")
+kontrol(dm.title:find("eşleşmedi", 1, true) ~= nil, "eşleşmemiş görünüyor")
+dugme(dm, "Okuyacağım").callback()
+local ara = son("InputDialog")
+kontrol(ara.input == "Dönüşüm Franz Kafka", "dosyadaki bilgilerle arama: " .. ara.input)
+dugme(ara, "Ara").callback()
+son("ButtonDialog").buttons[2][1].callback(); calistir()
+kontrol(fm:dosyaEslesmesi("/kobo/Kafka/Donusum.epub").id == "701" and durum["701"] == 0, "Can baskısı eşleşti ve Okuyacağım yapıldı")
+
+print("12) Toplu Okuyacağım (seçili dosyalar)")
+durum["800"] = 1 -- Gog zaten okunmuş
+FileManager.instance.selected_files = { ["/kobo/Gog.epub"] = true, ["/kobo/Kafka/Bilinmeyen.epub"] = true, ["/kobo/Kafka/Sairin Romani.epub"] = true, ["/kobo/resim.jpg"] = true }
+fm:topluOkuyacagim(); calistir()
+local bl = son("Menu")
+kontrol(bl.title == "Emin olunamayan kitaplar", "belirsizler listesi açıldı")
+kontrol(#bl.item_table == 2 and bl.item_table[2].text == "Bilinmeyen.epub", "sadece bulunamayan kitap belirsiz")
+kontrol(fm:dosyaEslesmesi("/kobo/Gog.epub").id == "800" and fm:dosyaEslesmesi("/kobo/Kafka/Sairin Romani.epub").id == "801", "dosya adından (Türkçe karaktersiz) eşleşti")
+menuSec(bl, function(it) return it.yol end)
+local aw = son("InputDialog"); aw._girdi = "Kaos Lordu"
+dugme(aw, "Ara").callback()
+son("ButtonDialog").buttons[1][1].callback()
+kontrol(bl.item_table[1].text:find("Devam: 3 kitabı", 1, true) ~= nil, "seçim sonrası liste: " .. bl.item_table[1].text)
+menuSec(bl, function(it) return it.eylem == "devam" end); calistir()
+kontrol(durum["801"] == 0 and durum["9517"] == 0, "boş durumdakiler Okuyacağım oldu")
+kontrol(durum["800"] == 1, "okunmuş kitaba dokunulmadı")
+FileManager.instance.selected_files = nil
+
+print("13) Kütüphaneyi eşleştir (durdur, devam, gözden geçir)")
+local eslesmeler = fm.settings:readSetting("eslesmeler")
+eslesmeler["/kobo/Gog.epub"] = nil
+eslesmeler["/kobo/Kafka/Bilinmeyen.epub"] = nil
+fm:kutuphaneEslestir()
+local cb = son("ConfirmBox")
+kontrol(cb.text:find("5 kitap var; 2 tanesi", 1, true) ~= nil, "doğru sayım: " .. cb.text:gsub("\n.*", ""))
+cb.ok_callback()
+local ilk = son("InfoMessage")
+kontrol(ilk.text:find("0 / 2", 1, true) == nil and ilk.text:find("Durdurmak için dokun", 1, true), "ilerleme gösterildi")
+ilk.dismiss_callback()
+calistir()
+kontrol(son("InfoMessage").text:find("Durduruldu", 1, true) ~= nil, "durduruldu bildirimi")
+fm:kutuphaneEslestir()
+kontrol(son("ConfirmBox").text:find("1 tanesi", 1, true) ~= nil, "kaldığı yerden: 1 kitap kaldı")
+son("ConfirmBox").ok_callback(); calistir()
+local oz = son("ConfirmBox")
+kontrol(oz.text:find("1 kitap için seçim gerekli", 1, true) ~= nil, "özet: " .. oz.text:gsub("\n", " / "))
+oz.ok_callback()
+local gl = son("Menu")
+menuSec(gl, function(it) return it.yol end)
+dugme(son("InputDialog"), "Vazgeç").callback()
+kontrol(fm:belirsizSayisi() == 1, "vazgeçince listede kaldı")
+fm:kutuphaneEslestir()
+kontrol(son("ConfirmBox").text:find("1 kitap için seçim bekliyor", 1, true) ~= nil, "tekrar çalıştırınca bekleyeni söyledi")
+
+print("14) Ne okusam?")
+DOSYALAR["/kobo/Gog.epub"] = true
+fm:neOkusam()
+local no = son("ButtonDialog")
+kontrol(no.title:find("(3 / 4)", 1, true) ~= nil, "4 kitaptan 3'ü Kobo'da: " .. no.title:gsub("\n", " / "))
+local cihazda = 0
+for _, satir in ipairs(no.buttons) do if satir[1].text:find("^✓ ") then cihazda = cihazda + 1 end end
+kontrol(cihazda == 3, "Kobo'dakiler işaretli")
+for _, satir in ipairs(no.buttons) do if satir[1].text:find("Gog", 1, true) then satir[1].callback() end end
+kontrol(acilan == "/kobo/Gog.epub", "seçilen kitap açıldı")
+local raf_once = istekSay("uyeler/kitaplar/liste")
+fm:neOkusam()
+kontrol(istekSay("uyeler/kitaplar/liste") == raf_once, "liste önbellekten geldi")
+
+print("15) Okuyacaklarım koleksiyonu")
+RC.coll["1000Kitap – Okuyacaklarım"] = { ["/kobo/eski.epub"] = { file = "/kobo/eski.epub" } }
+fm:koleksiyonGuncelle()
+local kol = RC.coll["1000Kitap – Okuyacaklarım"]
+kontrol(kol["/kobo/Gog.epub"] and kol["/kobo/Kafka/Sairin Romani.epub"] and kol["/kobo/Kafka/Donusum.epub"] and not kol["/kobo/eski.epub"], "koleksiyon güncellendi, eski kitap çıkarıldı")
+kontrol(RC.yazildi == 1 and son("InfoMessage").text:find("3 kitap eklendi, 1 kitap çıkarıldı", 1, true), "özet: " .. son("InfoMessage").text:gsub("\n", " / "))
+
+print("16) Kitap bilgisi, popüler alıntılar, hedef")
+p:kitapKarti()
+local tv = son("TextViewer")
+kontrol(tv.text:find("Zeplin Kitap · 2019 · 357 sayfa", 1, true) and tv.text:find("7.8/10 (596 kişi)", 1, true)
+  and tv.text:find("Senin durumun: Okudum", 1, true) and tv.text:find("Puanın: 8", 1, true)
+  and tv.text:find("okuyanlar: Gökhan, Ece", 1, true), "bilgi kartı içeriği")
+p:populerAlintilar()
+tv = son("TextViewer")
+kontrol(tv.text:find("“Kim bilir kaç insan bir kitabı okuyup...”\n— Ersin Yaman · 489 beğeni · s. 12", 1, true) and tv.text:find("İkinci alıntı", 1, true), "popüler alıntılar")
+local hm = fm:hedefMenusu()
+hm[1].callback()
+kontrol(son("InfoMessage").text:find("okuma hedefin yok", 1, true) ~= nil, "hedef yok mesajı")
+hm[2].callback()
+local hd = son("InputDialog"); hd._girdi = "30"
+dugme(hd, "Kaydet").callback()
+local yil = os.date("%Y")
+kontrol(hedefler[yil] == 30 and sonIstek("diger/okumaHedefiKaydet").form.verilerimBen == "1", "hedef kaydedildi")
+hm[1].callback()
+kontrol(hm[1].text_func():find(yil .. " hedefi: 4 / 30 kitap", 1, true) ~= nil, "hedef göstergesi: " .. hm[1].text_func())
+
+print("17) Uyku ekranında alıntı")
+G_reader_settings:saveSetting("screensaver_message", "Uyuyorum")
+fm:uykuAc()
+kontrol(G_reader_settings:readSetting("screensaver_show_message") == true, "uyku mesajı açıldı")
+local msj = G_reader_settings:readSetting("screensaver_message")
+kontrol(msj == "“Alıntı 1 ％50”" or msj == "“Alıntı 2 ％50”", "mesaj alıntılardan biri ve % güvenli: " .. msj)
+fm:uykuKapat()
+kontrol(G_reader_settings:readSetting("screensaver_message") == "Uyuyorum" and G_reader_settings:readSetting("screensaver_show_message") == nil, "kapatınca eski ayarlar geri geldi")
+
+print("18) İhtiyaç anında Wi-Fi ve ortak kilit")
+p.settings:saveSetting("otomatik_wifi", true)
+network.online = false; ag_acik = false
+p:siraya({ tur = "puan", kitap_id = "9517", kitap_adi = "Kaos Lordu", puan = 9 })
+p:onCloseDocument(); calistir()
+kontrol(network.wifi_acildi == 1 and network.wifi_kapandi == 1 and puan["9517"] == 9, "Wi-Fi açıldı, gönderildi, kapandı")
+network.online = true; ag_acik = true
+local once_puan = istekSay("kitaplar/kitapPuanVer")
+p:siraya({ tur = "puan", kitap_id = "9517", kitap_adi = "Kaos Lordu", puan = 7 })
+p:siraya({ tur = "puan", kitap_id = "700", kitap_adi = "Dönüşüm", puan = 6 })
+p:kuyruguGonder(true)
+fm:kuyruguGonder(true)
+calistir()
+kontrol(istekSay("kitaplar/kitapPuanVer") - once_puan == 2, "iki örnek aynı anda göndermeye çalışınca tekrar yok")
+
+print("19) Oturum düşerse sıra korunur")
+Api.oturum_kodu = "SURESI-DOLMUS"
+p:siraya({ tur = "durum", kitap_id = "700", kitap_adi = "Dönüşüm", durum = 2 })
+p:kuyruguGonder(true); calistir()
+kontrol(#p:kuyruk() == 1 and son("InfoMessage").text:find("giriş yapınız", 1, true), "sırada kaldı, uyarıldı")
+Api.oturum_kodu = OTURUM
+p:kuyruguGonder(false); calistir()
+kontrol(#p:kuyruk() == 0 and durum["700"] == 2, "kod düzelince gönderildi")
+
+print("21) Renk sonradan açılınca eski vurgular gitmez")
+local ann2 = okuyucu_ui.annotation.annotations
+ilerlet(600)
+ann2[#ann2 + 1] = { datetime = os.date("%Y-%m-%d %H:%M:%S", saat - 300), drawer = "lighten", color = "green", text = "yeşil eski", page = "/body/DocFragment[11]/body/p[1]/text().0" }
+local rm = p:renkMenusu()
+local yesil
+for _, o in ipairs(rm) do if o.text_func():find("^Yeşil") then yesil = o end end
+for _, alt in ipairs(yesil.sub_item_table) do if alt.text == "Herkese açık alıntı" then alt.callback() end end
+kontrol(yesil.text_func() == "Yeşil: herkese açık alıntı", "menü: " .. yesil.text_func())
+ilerlet(5)
+ann2[#ann2 + 1] = { datetime = os.date("%Y-%m-%d %H:%M:%S", saat + 1), drawer = "lighten", color = "green", text = "yeşil yeni", page = "/body/DocFragment[12]/body/p[1]/text().0" }
+ilerlet(5)
+local once_y = #alintilar
+p:onAnnotationsModified(); calistir()
+kontrol(#alintilar == once_y + 1 and alintilar[#alintilar].soz == "yeşil yeni", "sadece renk açıldıktan sonraki vurgu gitti")
+
+print("22) Gözden geçirmede adaylar yayınevleriyle")
+fm:belirsizListesi({ ["/kobo/x.epub"] = { sorgu = "Dönüşüm", baslik = "Dönüşüm",
+  adaylar = { { id = "701", adi = "Dönüşüm", yazar = "Franz Kafka" }, { id = "702", adi = "Dönüşüm", yazar = "Ovidius" } } } }, function() end)
+menuSec(son("Menu"), function(it) return it.yol end)
+local adl = son("ButtonDialog")
+kontrol(adl.buttons[1][1].text == "Dönüşüm — Franz Kafka · Can Yayınları, 2018" and adl.buttons[2][1].text == "Dönüşüm — Ovidius · Kabalcı, 2010", "adaylar: " .. adl.buttons[1][1].text .. " / " .. adl.buttons[2][1].text)
+kontrol(dugme(adl, "Atla") ~= nil, "Atla düğmesi var")
+
+
+print("23) Atlananlar listesi")
+local bel = fm:kutuphaneBelirsizleri()
+kontrol(bel["/kobo/Kafka/Bilinmeyen.epub"] ~= nil, "Bilinmeyen.epub gözden geçirmede bekliyor")
+fm:kutuphaneGozdenGecir()
+menuSec(son("Menu"), function(it) return it.yol == "/kobo/Kafka/Bilinmeyen.epub" end)
+local ap = son("InputDialog")
+kontrol(ap ~= nil, "aday yoksa arama penceresi açıldı")
+-- arama sonucunda Atla düğmesi yok; adaylı akışı taklit et
+fm.settings:saveSetting("kutuphane_belirsiz", { ["/kobo/Kafka/Bilinmeyen.epub"] = { sorgu = "Kaos", baslik = "Hiç Olmayan Kitap",
+  adaylar = { { id = "9517", adi = "Kaos Lordu", yazar = "Robert Jordan", yayinevi = "İthaki" } }, yayinevi_eklendi = true } })
+fm:kutuphaneGozdenGecir()
+menuSec(son("Menu"), function(it) return it.yol == "/kobo/Kafka/Bilinmeyen.epub" end)
+dugme(son("ButtonDialog"), "Atla").callback()
+kontrol(fm:atlananSayisi() == 1 and fm:belirsizSayisi() == 0, "atlanan listeye geçti")
+local mo = fm:menuOgeleri()
+local atl_oge
+for _, o in ipairs(mo) do if o.text_func and o.text_func():find("^Atlananlar") then atl_oge = o end end
+kontrol(atl_oge.text_func() == "Atlananlar (1)" and atl_oge.enabled_func(), "menüde sayı: " .. atl_oge.text_func())
+atl_oge.callback()
+local al = son("Menu")
+kontrol(al.title == "Atlanan kitaplar" and al.item_table[1].text == "Hepsini tekrar taramaya al"
+  and al.item_table[2].text == "Bilinmeyen.epub" and al.item_table[2].mandatory == "Kafka", "liste: dosya adı + klasör")
+menuSec(al, function(it) return it.yol end)
+dugme(son("ButtonDialog"), "Tekrar taramaya al").callback()
+kontrol(fm:atlananSayisi() == 0 and al.item_table[1].text == "Atlanan kitap kalmadı.", "tekrar taramaya alındı, liste yenilendi")
+fm:kutuphaneEslestir()
+kontrol(son("ConfirmBox").text:find("1 tanesi", 1, true) ~= nil, "kütüphane taramasında yine aranacak")
+son("ConfirmBox").ok_callback(); calistir()
+son("ConfirmBox").ok_callback()
+menuSec(son("Menu"), function(it) return it.yol end)
+-- aday yok: arama penceresinde Vazgeç; doğrudan atla
+fm.settings:saveSetting("kutuphane_belirsiz", {})
+fm.settings:saveSetting("kutuphane_atlanan", { ["/kobo/Kafka/Bilinmeyen.epub"] = true, ["/kobo/silinmis.epub"] = true })
+fm:atlananlarListesi()
+al = son("Menu")
+menuSec(al, function(it) return it.eylem == "hepsi" end)
+son("ConfirmBox").ok_callback()
+kontrol(fm:atlananSayisi() == 0, "hepsi tekrar taramaya alındı")
+fm.settings:saveSetting("kutuphane_atlanan", { ["/kobo/Kafka/Bilinmeyen.epub"] = true })
+fm:atlananlarListesi()
+al = son("Menu")
+menuSec(al, function(it) return it.yol end)
+dugme(son("ButtonDialog"), "Şimdi eşleştir").callback()
+local sa = son("InputDialog"); sa._girdi = "Kaos Lordu"
+dugme(sa, "Ara").callback()
+son("ButtonDialog").buttons[1][1].callback()
+kontrol(fm:dosyaEslesmesi("/kobo/Kafka/Bilinmeyen.epub").id == "9517" and fm:atlananSayisi() == 0, "eşleştirilince atlananlardan çıktı")
+kontrol(al.item_table[1].text == "Atlanan kitap kalmadı.", "liste yenilendi")
+
+print("24) Kobo'daki kitapları 1000Kitap kitaplığına ekle")
+local esl = fm.settings:readSetting("eslesmeler")
+esl["/kobo/eski-silinmis.epub"] = { id = "900", adi = "Yaşam Yolu 1", yazar = "Anton Makarenko" }
+local km = fm:kitaplikMenusu()
+kontrol(#km == 2, "dosya tarayıcısında sadece toplu öğeler")
+km[1].callback()
+local kl = son("Menu")
+kontrol(kl.title == "Kitaplığa ekle", "seçim listesi açıldı")
+kontrol(kl.item_table[1].eylem == "bilgi" and kl.item_table[1].text:find("1 tanesi zaten kitaplığında, 1 tanesinin başka baskısı var", 1, true) ~= nil,
+  "bilgi: " .. kl.item_table[1].text)
+local adlar = {}
+for _, it in ipairs(kl.item_table) do if it.indeks then adlar[#adlar + 1] = it.text end end
+kontrol(#adlar == 3, "eklenebilecek 3 kitap: " .. table.concat(adlar, " / "))
+local hic_secili = true
+for _, it in ipairs(kl.item_table) do if it.indeks and it.text:find("^☑") then hic_secili = false end end
+kontrol(hic_secili, "varsayılan olarak hiçbiri seçili değil")
+local walden_yok, donusum_yok, silinmis_yok = true, true, true
+for _, a in ipairs(adlar) do
+  if a:find("Walden", 1, true) then walden_yok = false end
+  if a:find("Dönüşüm", 1, true) then donusum_yok = false end
+  if a:find("Yaşam Yolu", 1, true) then silinmis_yok = false end
+end
+kontrol(walden_yok and donusum_yok and silinmis_yok, "kitaplıktakiler, başka baskısı olan ve silinmiş dosya listede yok")
+menuSec(kl, function(it) return it.eylem == "bilgi" end)
+kontrol(not kl._kapandi, "bilgi satırına dokunmak bir şey yapmadı")
+menuSec(kl, function(it) return it.text and it.text:find("Gog", 1, true) end)
+menuSec(kl, function(it) return it.text and it.text:find("Kaos Lordu", 1, true) end)
+kontrol(kl.item_table[2].text == "Seçilenleri kitaplığa ekle (2)", "onay: " .. kl.item_table[2].text)
+menuSec(kl, function(it) return it.eylem == "onay" end); calistir()
+kontrol(kitaplikta("800") and kitaplikta("9517") and not kitaplikta("801"), "seçilen 2 kitap eklendi")
+kontrol(sonIstek("kitaplar/kitapKutuphanemeEkle").q.forceEkle == "1", "ekleme zorla-ekle ile gitti")
+kontrol(son("InfoMessage").text:find("2 kitap kitaplığına eklendi", 1, true) ~= nil, "özet: " .. son("InfoMessage").text)
+esl["/kobo/eski-silinmis.epub"] = nil
+
+print("25) 1000Kitap kitaplığından çıkar")
+km[2].callback()
+local cl = son("Menu")
+kontrol(cl.title == "Kitaplığından çıkar" and cl.item_table[1].text:find("Kobo'da olmayan basılı", 1, true), "liste ve uyarı")
+local shen, gog
+for _, it in ipairs(cl.item_table) do
+  if it.text and it.text:find("Shenzen", 1, true) then shen = it end
+  if it.text and it.text:find("Gog", 1, true) then gog = it end
+end
+kontrol(shen and shen.mandatory == nil and gog and gog.mandatory == "Kobo'da", "Kobo'dakiler işaretli, basılı kitap değil")
+menuSec(cl, function(it) return it.text and it.text:find("Gog", 1, true) end)
+menuSec(cl, function(it) return it.eylem == "onay" end)
+local ec = son("ConfirmBox")
+kontrol(ec.text:find("1 kitap 1000Kitap kitaplığından çıkarılacak", 1, true) ~= nil, "onay soruldu")
+-- bu arada sitede elle çıkarılmış olsun
+local eski_kitaplik = #KITAPLIK
+for i = #KITAPLIK, 1, -1 do if KITAPLIK[i] == "800" then table.remove(KITAPLIK, i) end end
+local once_degistir = istekSay("kitaplar/kitapKutuphanemeEkle")
+ec.ok_callback(); calistir()
+kontrol(istekSay("kitaplar/kitapKutuphanemeEkle") == once_degistir and not kitaplikta("800"),
+  "zaten kitaplıkta değilse değiştir isteği gönderilmedi (tekrar eklenmedi)")
+kontrol(son("InfoMessage").text:find("zaten kitaplığında değildi", 1, true) ~= nil, "bildirildi: " .. son("InfoMessage").text)
+km[2].callback()
+cl = son("Menu")
+menuSec(cl, function(it) return it.text and it.text:find("Kaos Lordu", 1, true) end)
+menuSec(cl, function(it) return it.eylem == "onay" end)
+son("ConfirmBox").ok_callback(); calistir()
+kontrol(not kitaplikta("9517") and kitaplikta("92807") and kitaplikta("24319"), "sadece seçilen çıkarıldı, basılı kitap yerinde")
+kontrol(sonIstek("kitaplar/kitapKutuphanemeEkle").q.forceEkle == "0", "çıkarma değiştir isteğiyle gitti")
+
+print("26) Okuyucu ve uzun basma menüsünden tek kitap")
+local rkm = p:kitaplikMenusu()
+kontrol(#rkm == 4 and rkm[1].text == "Bu kitabı kitaplığa ekle", "okuyucuda tek kitap öğeleri var")
+local acik = p:kitapBilgisi()
+rkm[2].callback(); calistir()
+kontrol(not kitaplikta(acik.id), "açık kitap (" .. acik.adi .. ") kitaplıktan çıkarıldı")
+rkm[1].callback(); calistir()
+kontrol(kitaplikta(acik.id), "tekrar eklendi")
+local row2 = FileManager.file_dialog_added_buttons[1]("/kobo/Kafka/Sairin Romani.epub", true, nil)
+row2[1].callback()
+dugme(son("ButtonDialog"), "Kitaplığa ekle").callback(); calistir()
+kontrol(kitaplikta("801"), "uzun basmadan eklendi")
+row2[1].callback()
+dugme(son("ButtonDialog"), "Kitaplıktan çıkar").callback(); calistir()
+kontrol(not kitaplikta("801"), "uzun basmadan çıkarıldı")
+
+print("27) Ayar açıkken eşleşen kitap otomatik eklenir, değişince eskisi çıkar")
+fm.settings:saveSetting("kitapliga_ekle", true)
+fm:eslesmeKaydet("/kobo/Kafka/Donusum.epub", { id = "702", adi = "Dönüşüm", yazar = "Ovidius" })
+fm:kuyruguGonder(true); calistir()
+kontrol(kitaplikta("702"), "eşleşen kitap otomatik eklendi")
+fm:eslesmeKaydet("/kobo/Kafka/Donusum.epub", { id = "701", adi = "Dönüşüm", yazar = "Franz Kafka" })
+local turler = {}
+for _, o in ipairs(fm:kuyruk()) do turler[#turler + 1] = o.tur .. ":" .. o.kitap_id end
+kontrol(table.concat(turler, ",") == "kitaplik_cikar:702,kitaplik_ekle:701", "sıra: " .. table.concat(turler, ","))
+fm:kuyruguGonder(true); calistir()
+kontrol(kitaplikta("701") and not kitaplikta("702"), "eklentinin eklediği eski baskı çıktı, yenisi eklendi")
+-- kullanıcının zaten kitaplığında olan (basılı) baskıya dokunulmamalı
+fm:eslesmeKaydet("/kobo/Gog.epub", { id = "92807", adi = "Shenzen", yazar = "Guy Delisle" })
+fm:kuyruguGonder(true); calistir()
+fm:eslesmeKaydet("/kobo/Gog.epub", { id = "800", adi = "Gog", yazar = "Giovanni Papini" })
+local once_bilgi = #gosterilen
+fm:kuyruguGonder(true); calistir()
+kontrol(kitaplikta("92807") and kitaplikta("800"), "önceden kitaplıkta olan Shenzen yanlış eşleşme düzelince silinmedi")
+local ses = true
+for i = once_bilgi + 1, #gosterilen do if gosterilen[i].text and gosterilen[i].text:find("değildi", 1, true) then ses = false end end
+kontrol(ses, "otomatik atlamalar için gereksiz bildirim yok")
+fm:eslesmeKaydet("/kobo/Kafka/Donusum.epub", { id = "701", adi = "Dönüşüm", yazar = "Franz Kafka" })
+kontrol(#fm:kuyruk() == 0, "aynı eşleşme tekrar kaydedilince bir şey gönderilmedi")
+fm.settings:saveSetting("kitapliga_ekle", nil)
+
+print("20) Menüler hatasız kuruluyor")
+local ok1, m1 = pcall(function() return p:menuOgeleri() end)
+local ok2, m2 = pcall(function() return fm:menuOgeleri() end)
+local ok3, m3 = pcall(function() return p:ayarlarMenusu() end)
+kontrol(ok1 and ok2 and ok3, "menüler kuruldu " .. tostring(m1) .. tostring(m2) .. tostring(m3))
+local metinler = {}
+local function gez(t) for _, o in ipairs(t) do
+  local ok, m = pcall(function() return o.text_func and o.text_func() or o.text end)
+  if not ok then metinler[#metinler + 1] = "HATA:" .. tostring(m) else metinler[#metinler + 1] = m end
+  if o.sub_item_table then gez(o.sub_item_table) end
+  if o.sub_item_table_func then gez(o.sub_item_table_func()) end
+end end
+gez(m1); gez(m2)
+local hata_var = false
+for _, m in ipairs(metinler) do if tostring(m):find("^HATA") then hata_var = true; print("   " .. m) end end
+kontrol(not hata_var, #metinler .. " menü öğesi metni sorunsuz")
+print("   Okuyucu menüsü: " .. table.concat((function() local t = {} for _, o in ipairs(m1) do t[#t + 1] = o.text_func and o.text_func() or o.text end return t end)(), " | "))
+print("   Dosya tarayıcısı menüsü: " .. table.concat((function() local t = {} for _, o in ipairs(m2) do t[#t + 1] = o.text_func and o.text_func() or o.text end return t end)(), " | "))
+
+print(("\n%d hata"):format(hatalar))
+if #loglar > 0 then print("log: " .. table.concat(loglar, " | ")) end
+os.exit(hatalar == 0 and 0 or 1)
