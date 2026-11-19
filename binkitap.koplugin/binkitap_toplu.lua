@@ -691,14 +691,15 @@ return function(BinKitap)
                 }
             end
             self:topluSiraya(ogeler)
-            if durum == Api.DURUM.okuyacagim then
-                self:bildir(T(_("%1 kitap sıraya alındı. Okuduğun ya da okumakta olduğun kitaplara dokunulmaz."), #liste))
-            else
-                self:bildir(T(_("%1 kitap \"%2\" olarak sıraya alındı."), #liste, Api.DURUM_ADI[durum]))
+            if #ogeler <= BinKitap.TOPLU_ESIK then
+                if durum == Api.DURUM.okuyacagim then
+                    self:bildir(T(_("%1 kitap sıraya alındı. Okuduğun ya da okumakta olduğun kitaplara dokunulmaz."), #liste))
+                else
+                    self:bildir(T(_("%1 kitap \"%2\" olarak sıraya alındı."), #liste, Api.DURUM_ADI[durum]))
+                end
             end
-            NetworkMgr:runWhenOnline(function()
-                self:kuyruguGonder(false, sonra and function() sonra(liste) end or nil)
-            end)
+            if sonra then sonra(liste) end
+            self:sirayiGonder(#ogeler)
         end
 
         if #aranacak == 0 then return sirala(eslesmis) end
@@ -883,7 +884,7 @@ return function(BinKitap)
         end
         self:topluSiraya(ogeler)
         kitaplik_onbellek = nil
-        NetworkMgr:runWhenOnline(function() self:kuyruguGonder(false) end)
+        self:sirayiGonder(#ogeler)
     end
 
     --- Kobo'daki eşleşmiş kitaplardan kitaplıkta olmayanları seçtirip ekler.

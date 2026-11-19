@@ -260,8 +260,8 @@ return function(BinKitap)
                 end
             end
             self:topluSiraya(ogeler)
-            self:bildir(T(_("%1 vurgu sıraya alındı."), #ogeler), 2)
-            self:kuyruguGonder(false)
+            if #ogeler <= BinKitap.TOPLU_ESIK then self:bildir(T(_("%1 vurgu sıraya alındı."), #ogeler), 2) end
+            self:sirayiGonder(#ogeler)
         end)
     end
 

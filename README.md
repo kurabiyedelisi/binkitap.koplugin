@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 0.2.7 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 0.2.8 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -111,7 +111,7 @@ Yazdığın metin taslak olarak saklanır: pencereyi kapatsan da, 1000Kitap ilet
 ### 1000Kitap kitaplığım
 
 - **Kobo'daki kitapları kitaplığa ekle:** Eşleşmiş kitaplarından kitaplığında olmayanları listeler; işaretlediklerin eklenir. Başka bir baskısı zaten kitaplığında olan kitap listede çıkmaz.
-- Yüzlerce kitap seçebilirsin: kitaplığın sayfa sayfa getirilir, gönderim sırasında ilerleme görünür. Dokununca durur; kalanlar **Bekleyen gönderiler**'de bekler, oradan devam edersin.
+- Yüzlerce kitap seçebilirsin: seçtiklerin sıraya alınır ve arka planda, okumanı bölmeden yavaş yavaş gönderilir (ayrıntı: "Kısayollar ve çevrimdışı kullanım").
 - **Kitaplığımdan çıkar:** Kitaplığının tamamını listeler; Kobo'da olanlar işaretlidir. Basılı kitapların da bu listededir; sadece işaretlediklerin, onay verdikten sonra çıkarılır.
 - **Eşleşen kitapları kitaplığıma ekle** (Ayarlar, varsayılan kapalı): Eşleşen kitap kitaplığına da eklenir. Toplu onaylananlar ancak sen doğrulayınca eklenir.
 
@@ -126,7 +126,9 @@ Yazdığın metin taslak olarak saklanır: pencereyi kapatsan da, 1000Kitap ilet
 
 ### Kısayollar ve çevrimdışı kullanım
 
-- Wi-Fi kapalıyken yaptığın her şey sıraya girer. **Bekleyen gönderiler**'e dokununca hemen gönderir, basılı tutunca sırayı temizler.
+- Wi-Fi kapalıyken yaptığın her şey sıraya girer.
+- **Toplu işler arka planda gider.** Bir seferde 5'ten fazla iş sıraya girerse (kitaplığa toplu ekleme, toplu "Okudum", vurgu aktarımı gibi) ekran meşgul edilmez: işler birer birer, birkaç saniye arayla gönderilir; sayfa yeni çevrildiyse biraz beklenir. Wi-Fi giderse durur, gelince ya da KOReader yeniden açılınca kaldığı yerden sürer. Bitince kısa bir özet görünür.
+- **Bekleyen gönderiler** menüde kaç iş kaldığını ve arka planda gönderim sürüyorsa bunu gösterir. Dokununca beklemeden hepsini hemen gönderir, basılı tutunca sırayı temizler.
 - **İhtiyaç anında Wi-Fi** açıksa kitabı kapattığında Wi-Fi'yi açar, gönderir, kapatır.
 - KOReader'ın hareket ayarlarında dört eylem var: **1000Kitap: bekleyenleri gönder**, **1000Kitap: Okuyacaklarıma ekle**, **1000Kitap: ileti yaz**, **1000Kitap: ne okusam?**
 
@@ -145,7 +147,7 @@ Güncellemede hesap bilgilerin, ayarların ve bekleyen gönderilerin korunur. Do
 | "Giriş yapınız" uyarısı | Oturumun kapanmış. Kodları yeniden al ve `ayar.lua`'yı güncelle. Bekleyen gönderilerin kaybolmaz. |
 | Ne okusam, koleksiyon ya da uyku ekranı çalışmıyor | `ayar.lua`'ya ya da **Hesap bilgileri**'ne kullanıcı adını ekle. |
 | Kitap yanlış baskıyla eşleşmiş | Okurken **Baskıyı değiştir**, ya da dosyaya uzun bas → **Eşleşmeyi değiştir.** |
-| Çok kitabı kitaplığa eklerken uzun sürüyor | Kitaplar tek tek, cihazı yormadan gönderilir. Ekrandaki sayaçtan izleyebilir, dokunup durdurabilirsin. |
+| Toplu işler hemen gitmiyor | Bilerek böyle: arka planda yavaş yavaş gönderilir. Acelen varsa **Bekleyen gönderiler**'e dokun. |
 | Kütüphane eşleştirmesi yavaş | Bilerek böyle: cihazı kilitlememek için kitaplar arasında bekler. İstediğin an durdurup sonra devam edebilirsin. |
 | Gönderiler gitmiyor | Wi-Fi'yi aç ya da **Bekleyen gönderiler**'e dokun. |
 

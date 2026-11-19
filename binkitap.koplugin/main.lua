@@ -49,7 +49,12 @@ local SEANS_UST_SINIR = 4 * 3600
 
 -- Dosya tarayıcısı ve okuyucu ayrı eklenti örnekleri açar; ayarlar ve gönderim
 -- kilidi hepsi için ortak olmalı.
-local ORTAK = { settings = nil, gonderiliyor = false, wifi_biz_actik = false }
+local ORTAK = { settings = nil, gonderiliyor = false, wifi_biz_actik = false,
+    arka_plan = nil,        -- arka planda gönderim sürüyorsa { gonderilen, hata, hatalar }
+    son_etkilesim = 0 }     -- son sayfa çevirme zamanı: okurken araya girmemek için
+local ARKA_ARALIK = 3        -- saniye; arka planda iki gönderim arası
+local ARKA_SESSIZLIK = 4     -- saniye; sayfa çevirdikten sonra bu kadar beklenir
+local TOPLU_ESIK = 5         -- bundan fazla iş tek seferde sıraya girerse arka planda gönderilir
 
 local RENKLER = {
     { kod = "yellow", ad = "Sarı" }, { kod = "orange", ad = "Turuncu" },
@@ -73,6 +78,7 @@ local BinKitap = WidgetContainer:extend{
 BinKitap.Api = Api
 BinKitap.Y = Y
 BinKitap.ORTAK = ORTAK
+BinKitap.TOPLU_ESIK = TOPLU_ESIK
 BinKitap.SURUM = SURUM
 BinKitap.DIZIN = eklenti_dizini
 
@@ -104,6 +110,10 @@ function BinKitap:init()
     end
     if self.dosyaMenusunuKaydet then self:dosyaMenusunuKaydet() end
     if not self.ui.document and self.ilkAktarimSor then self:ilkAktarimSor() end
+    -- KOReader yeniden açıldıysa yarım kalan kalabalık sırayı sürdür
+    if not ORTAK.arka_plan and Api:kimlikVar() and #self:kuyruk() > TOPLU_ESIK and NetworkMgr:isOnline() then
+        UIManager:scheduleIn(10, function() self:yavasGonder() end)
+    end
 end
 
 function BinKitap:onDispatcherRegisterActions()
@@ -1259,6 +1269,100 @@ local OZET_METNI = {
     kitaplik_ekle = "%1 kitap kitaplığına eklendi.", kitaplik_cikar = "%1 kitap kitaplığından çıkarıldı.",
 }
 
+--- Sırayı arka planda, okumayı bölmeden yavaş yavaş gönderir: bir seferde tek iş,
+-- işler arasında ARKA_ARALIK saniye; sayfa yeni çevrildiyse biraz bekler. Ağ yoksa durur,
+-- Wi-Fi gelince (onNetworkConnected) kaldığı yerden sürer. Bitince kısa bir özet gösterir.
+function BinKitap:yavasGonder()
+    if ORTAK.arka_plan or #self:kuyruk() == 0 or not Api:kimlikVar() then return end
+    ORTAK.arka_plan = { gonderilen = 0, hata = 0, hatalar = {} }
+    local adim
+    local function devam(sn) UIManager:scheduleIn(sn, adim) end
+    local function bitir(mesaj)
+        local d = ORTAK.arka_plan
+        ORTAK.arka_plan = nil
+        self.settings:flush()
+        if not d then return end
+        local satirlar = {}
+        if d.gonderilen > 0 then satirlar[#satirlar + 1] = T(_("1000Kitap: %1 iş arka planda gönderildi."), d.gonderilen) end
+        if d.hata > 0 then
+            satirlar[#satirlar + 1] = T(_("%1 iş gönderilemedi:"), d.hata)
+            for _i, h in ipairs(d.hatalar) do satirlar[#satirlar + 1] = h end
+        end
+        if mesaj then satirlar[#satirlar + 1] = mesaj end
+        if #satirlar > 0 and (d.gonderilen + d.hata >= TOPLU_ESIK or d.hata > 0 or mesaj) then
+            UIManager:show(InfoMessage:new{ text = table.concat(satirlar, "\n"), timeout = d.hata > 0 and 8 or 4 })
+        end
+    end
+    local yazilmadi = 0
+    adim = function()
+        local d = ORTAK.arka_plan
+        if not d then return end
+        if ORTAK.gonderiliyor then return devam(5) end -- elle gönderim sürüyor
+        if not Api:kimlikVar() then return bitir() end
+        if not NetworkMgr:isOnline() then
+            ORTAK.arka_plan = nil -- Wi-Fi gelince yeniden başlar
+            return
+        end
+        if os.time() - (ORTAK.son_etkilesim or 0) < ARKA_SESSIZLIK then return devam(ARKA_SESSIZLIK) end
+        local k = self:kuyruk()
+        local oge = k[1]
+        if not oge then return bitir() end
+        ORTAK.gonderiliyor = true
+        local ok, sonuc, err, tur = pcall(function() return self:ogeGonder(oge) end)
+        ORTAK.gonderiliyor = false
+        if not ok then
+            logger.err("1000Kitap: arka plan gönderim hatası", sonuc)
+            err, tur, sonuc = tostring(sonuc), "sunucu", nil
+        end
+        if not sonuc and tur == "ag" then
+            ORTAK.arka_plan = nil -- sırada kalsın; ağ gelince tekrar denenir
+            return
+        end
+        if not sonuc and tur == "yetki" then
+            return bitir(err)
+        end
+        table.remove(k, 1)
+        self.settings:saveSetting("kuyruk", k)
+        local tekrarlanabilir = oge.tur == "kitaplik_ekle" or oge.tur == "kitaplik_cikar"
+            or oge.tur == "durum" or oge.tur == "ilerleme" or oge.tur == "puan"
+        yazilmadi = yazilmadi + 1
+        if not tekrarlanabilir or yazilmadi >= 10 then
+            self.settings:flush()
+            yazilmadi = 0
+        end
+        if sonuc then
+            if not sonuc.atlandi then d.gonderilen = d.gonderilen + 1 end
+        else
+            d.hata = d.hata + 1
+            if #d.hatalar < 5 then
+                local ozet = (oge.tur == "alinti" and kisalt(oge.soz or "", 50))
+                    or ((oge.tur == "ozel_not" or oge.tur == "ileti") and kisalt(oge.metin or "", 50))
+                    or (oge.kitap_adi or "")
+                d.hatalar[#d.hatalar + 1] = T(_("• %1: %2"), ozet, err or "?")
+            end
+            if oge.tur == "ileti" and self.iletiGeriAl then self:iletiGeriAl(oge) end
+        end
+        if #k == 0 then return bitir() end
+        devam(ARKA_ARALIK)
+    end
+    devam(2)
+end
+
+function BinKitap:arkaPlandaMi()
+    return ORTAK.arka_plan ~= nil
+end
+
+--- Çok iş birden sıraya girdiyse arka planda, azsa hemen (ilerlemeyle) gönderir.
+function BinKitap:sirayiGonder(yeni_is_sayisi)
+    if not Api:kimlikVar() then return self:kimlikUyarisi() end
+    if (yeni_is_sayisi or 0) > TOPLU_ESIK then
+        self:bildir(T(_("%1 iş sıraya alındı. Arka planda, okumanı bölmeden yavaş yavaş gönderilecek; \"Bekleyen gönderiler\"den izleyebilirsin."), yeni_is_sayisi), 5)
+        if NetworkMgr:isOnline() then self:yavasGonder() end
+        return
+    end
+    NetworkMgr:runWhenOnline(function() self:kuyruguGonder(false) end)
+end
+
 function BinKitap:kuyruguGonder(sessiz, bitince)
     local function son()
         if bitince then bitince() end
@@ -1459,12 +1563,15 @@ function BinKitap:onReaderReady()
         end
     end
     if self.uykuMesajiGuncelle then self:uykuMesajiGuncelle() end
-    if #self:kuyruk() > 0 and Api:kimlikVar() and NetworkMgr:isOnline() then
+    if #self:kuyruk() > TOPLU_ESIK and Api:kimlikVar() and NetworkMgr:isOnline() then
+        self:yavasGonder()
+    elseif #self:kuyruk() > 0 and Api:kimlikVar() and NetworkMgr:isOnline() then
         UIManager:scheduleIn(4, function() self:kuyruguGonder(true) end)
     end
 end
 
 function BinKitap:onPageUpdate()
+    ORTAK.son_etkilesim = os.time()
     self:seansIlerle()
     if self.settings:readSetting("ilerleme_modu") ~= "yuzde10" then return end
     local kitap = self:kitapBilgisi()
@@ -1506,7 +1613,10 @@ function BinKitap:onAnnotationsModified()
 end
 
 function BinKitap:onNetworkConnected()
-    if #self:kuyruk() > 0 and Api:kimlikVar() then
+    local n = #self:kuyruk()
+    if n > TOPLU_ESIK and Api:kimlikVar() then
+        self:yavasGonder()
+    elseif n > 0 and Api:kimlikVar() then
         UIManager:scheduleIn(3, function() self:kuyruguGonder(true) end)
     end
     if self.guncellemeKendiliginden then self:guncellemeKendiliginden() end
@@ -1695,7 +1805,12 @@ end
 
 function BinKitap:bekleyenlerMenuOgesi()
     return {
-        text_func = function() return T(_("Bekleyen gönderiler: %1"), #self:kuyruk()) end,
+        text_func = function()
+            if ORTAK.arka_plan then
+                return T(_("Bekleyen gönderiler: %1 (arka planda gönderiliyor)"), #self:kuyruk())
+            end
+            return T(_("Bekleyen gönderiler: %1"), #self:kuyruk())
+        end,
         keep_menu_open = true,
         callback = function()
             if #self:kuyruk() == 0 then return self:bildir(_("Bekleyen gönderi yok.")) end
@@ -1707,13 +1822,14 @@ function BinKitap:bekleyenlerMenuOgesi()
                 text = _("Bekleyen tüm gönderiler silinsin mi?"),
                 ok_text = _("Sil"),
                 ok_callback = function()
+                    ORTAK.arka_plan = nil
                     self.settings:saveSetting("kuyruk", {})
                     self.settings:flush()
                     if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
             })
         end,
-        help_text = _("Dokun: şimdi gönder. Basılı tut: sırayı temizle."),
+        help_text = _("Dokun: beklemeden şimdi gönder (ilerleme gösterilir). Basılı tut: sırayı temizle. Çok iş birden sıraya girince arka planda kendiliğinden gönderilir."),
     }
 end
 
