@@ -673,7 +673,8 @@ return function(BinKitap)
     end
 
     --- Dosyaları eşleştirir (eşleşmiş olanları tekrar aramaz) ve durumlarını sıraya alır.
-    function BinKitap:topluDurumEkle(yollar, durum)
+    -- sonra(hazir): sıraya alındıktan sonra { {yol, kitap}, ... } ile çağrılır (isteğe bağlı)
+    function BinKitap:topluDurumEkle(yollar, durum, sonra)
         local eslesmis, aranacak = {}, {}
         for _i, yol in ipairs(yollar) do
             local esl = self:dosyaEslesmesi(yol)
@@ -690,8 +691,14 @@ return function(BinKitap)
                 }
             end
             self:topluSiraya(ogeler)
-            self:bildir(T(_("%1 kitap sıraya alındı. Okuduğun ya da okumakta olduğun kitaplara dokunulmaz."), #liste))
-            NetworkMgr:runWhenOnline(function() self:kuyruguGonder(false) end)
+            if durum == Api.DURUM.okuyacagim then
+                self:bildir(T(_("%1 kitap sıraya alındı. Okuduğun ya da okumakta olduğun kitaplara dokunulmaz."), #liste))
+            else
+                self:bildir(T(_("%1 kitap \"%2\" olarak sıraya alındı."), #liste, Api.DURUM_ADI[durum]))
+            end
+            NetworkMgr:runWhenOnline(function()
+                self:kuyruguGonder(false, sonra and function() sonra(liste) end or nil)
+            end)
         end
 
         if #aranacak == 0 then return sirala(eslesmis) end

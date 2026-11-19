@@ -7,6 +7,7 @@ Dosya tarayıcısı ve toplu işler: binkitap_toplu.lua
 Keşif (ne okusam, koleksiyon, bilgi kartı, hedef, uyku ekranı): binkitap_kesif.lua
 GitHub'dan güncelleme: binkitap_guncelle.lua
 İleti yazma: binkitap_ileti.lua
+Okuduklarını aktarma: binkitap_aktar.lua
 ]]
 
 local ButtonDialog = require("ui/widget/buttondialog")
@@ -102,6 +103,7 @@ function BinKitap:init()
         end)
     end
     if self.dosyaMenusunuKaydet then self:dosyaMenusunuKaydet() end
+    if not self.ui.document and self.ilkAktarimSor then self:ilkAktarimSor() end
 end
 
 function BinKitap:onDispatcherRegisterActions()
@@ -170,6 +172,7 @@ function BinKitap:kimlikPenceresi()
                     UIManager:close(dialog)
                     self:kimlikYukle()
                     self:bildir(_("Kaydedildi."))
+                    if self.ilkAktarimSor then self:ilkAktarimSor() end
                 end,
             },
         }},
@@ -1775,6 +1778,13 @@ function BinKitap:menuOgeleri()
             callback = function() self:kutuphaneEslestir() end,
             help_text = _("Kobo'daki tüm kitapları 1000Kitap'ta arar; ISBN'i ya da başlığı ve yazarı birebir tutanları kendisi eşleştirir. Okuma durumlarını değiştirmez."),
         }
+        if self.okuduklarimiAktar then
+            ogeler[#ogeler + 1] = {
+                text = _("Okuduklarımı aktar"),
+                callback = function() self:okuduklarimiAktar() end,
+                help_text = _("KOReader'da bitirdiğin kitapları bulur; seçtiklerini 1000Kitap'ta \"Okudum\" yapar, sonra vurgularını göndermek isteyip istemediğini sorar."),
+            }
+        end
         ogeler[#ogeler + 1] = {
             text_func = function() return T(_("Emin olunamayanları gözden geçir (%1)"), self:belirsizSayisi()) end,
             enabled_func = function() return self:belirsizSayisi() > 0 end,
@@ -1818,5 +1828,6 @@ yukle("binkitap_toplu")(BinKitap)
 yukle("binkitap_kesif")(BinKitap)
 yukle("binkitap_guncelle")(BinKitap)
 yukle("binkitap_ileti")(BinKitap)
+yukle("binkitap_aktar")(BinKitap)
 
 return BinKitap

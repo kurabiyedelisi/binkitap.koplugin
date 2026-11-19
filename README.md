@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 0.2.6 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 0.2.7 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -12,6 +12,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 - **Alıntılarını gönderir.** Metni seç, "1000Kitap'a gönder"e dokun. Sayfa numarası basılı baskıya göre hesaplanır. İstersen özel not olarak da gönderebilirsin.
 - **Renge göre kendiliğinden gönderir.** Örneğin sarı vurgular herkese açık alıntı, mavi vurgular özel not olarak gider.
 - **İleti yazdırır.** Alıntı olmayan kendi yazını 1000Kitap'ta ileti olarak paylaşabilirsin, okuduğun kitabı etiketleyerek.
+- **Geçmişini aktarır.** KOReader'da daha önce bitirdiğin kitapları bulup 1000Kitap'ta "Okudum" yapar, istersen o kitaplardaki vurguları da gönderir.
 - **Okuma durumunu takip eder.** Kitabı açınca "Okuyorum" yapar. Kitap bitince tek ekranda "Okudum", puan ve kısa inceleme alır.
 - **Bütün kütüphaneni eşleştirir.** Kobo'daki kitapları 1000Kitap'taki karşılıklarıyla eşleştirir, emin olamadıklarını sana sorar.
 - **1000Kitap kitaplığını yönetir.** Kobo'daki kitapları kitaplığına seçerek ekler, seçtiklerini çıkarır.
@@ -49,10 +50,11 @@ Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "gir
 
 ## İlk adımlar
 
-1. **Kütüphaneni eşleştir:** Dosya tarayıcısında **Araçlar → 1000Kitap → Kütüphaneyi eşleştir.** Okuma durumlarına dokunmaz.
-2. **Emin olunamayanları gözden geçir:** Her kitap için doğru baskıyı seç. Çok kitap varsa "Tek adaylıları otomatik onayla" ya da "Hepsini ilk adayla onayla" ile hızlıca geç.
-3. **İstersen renk ata:** **Ayarlar → Renkle otomatik gönderim.**
-4. **Okumaya başla.** Gerisi kendiliğinden olur.
+1. **Okuduklarını aktar:** Hesabını bağladığında eklenti bir kez sorar: "KOReader'da bitirdiğin kitapları bulup 1000Kitap'ta Okudum yapayım mı?" **Bul** dersen listeyi gösterir, seçtiklerini aktarır, sonra vurgularını göndermek isteyip istemediğini sorar.
+2. **Kütüphaneni eşleştir:** Dosya tarayıcısında **Araçlar → 1000Kitap → Kütüphaneyi eşleştir.** Okuma durumlarına dokunmaz.
+3. **Emin olunamayanları gözden geçir:** Her kitap için doğru baskıyı seç. Çok kitap varsa "Tek adaylıları otomatik onayla" ya da "Hepsini ilk adayla onayla" ile hızlıca geç.
+4. **İstersen renk ata:** **Ayarlar → Renkle otomatik gönderim.**
+5. **Okumaya başla.** Gerisi kendiliğinden olur.
 
 ## Kullanım
 
@@ -77,6 +79,17 @@ Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "gir
 - **Bitiş ekranı:** Kitap bitince "Okudum", 1–10 puan ve inceleme tek ekranda.
 - **Okuma ilerlemesi ve seanslar** (varsayılan kapalı): Sayfanı ve okuma süreni gönderir.
   1000Kitap'ta "Okuduğun sayfa sayısını güncellerken yeni bir gönderi paylaşılsın mı?" ayarı açıksa her güncelleme herkese açık bir gönderi olur; açmadan önce o ayarı sitede kapat.
+
+### Okuduklarını aktar
+
+**Araçlar → 1000Kitap → Okuduklarımı aktar.** Eklentiyi kurup hesabını bağladığında bir kez kendiliğinden de sorar.
+
+1. KOReader'da "Bitti" olarak işaretlenmiş kitapların bulunur. Kitaplar açılmaz, bilgiler KOReader'ın kendi kayıtlarından okunur.
+2. Liste açılır: "Bitti" olanlar seçili gelir. Sonuna kadar okunmuş ama "Bitti" işaretlenmemiş olanlar da listede durur, ama seçili gelmez. Yarım bıraktıkların listede çıkmaz.
+3. Seçtiklerin 1000Kitap'ta **Okudum** olur. Eşleşmemiş olanlar önce 1000Kitap'ta aranır.
+4. Ardından vurgusu olan kitaplar listelenir; hangilerinin vurgularını göndereceğini seçersin, hiçbirini seçmeden kapatabilirsin. Vurgular herkese açık alıntı ya da özel not olarak gider; sayfa numaraları basılı baskıya göre hesaplanır.
+
+Daha önce gönderilmiş vurgular tekrar gönderilmez.
 
 ### Okuyacaklar listesi
 
