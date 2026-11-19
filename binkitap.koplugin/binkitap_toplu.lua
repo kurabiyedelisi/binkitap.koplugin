@@ -10,6 +10,7 @@
 local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")
+local InputDialog = require("ui/widget/inputdialog")
 local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
 local UIManager = require("ui/uimanager")
@@ -41,22 +42,51 @@ return function(BinKitap)
     -- Genel seçim listesi (işaretle / işareti kaldır)
     -------------------------------------------------------------------------
 
-    --- p = { baslik, ogeler = { {metin, ek, secili, veri} }, onay_metni ("…(%1)"), onay = function(veriler) }
+    --- p = { baslik, ogeler = { {metin, ek, secili, veri} }, onay_metni ("…(%1)"), onay = function(veriler),
+    --        bilgi (üstte bilgi satırı), aranabilir (listede arama) }
     function BinKitap:secimListesi(p)
         local menu
-        local ust = p.bilgi and 1 or 0
+        local filtre = nil   -- normalleştirilmiş arama metni
+        local function gorunur(o)
+            if not filtre then return true end
+            return Y.normal(o.metin .. " " .. (o.ek or "")):find(filtre, 1, true) ~= nil
+        end
         local function itemler()
             local secili = 0
             for _i, o in ipairs(p.ogeler) do if o.secili then secili = secili + 1 end end
             local t = {}
             if p.bilgi then t[#t + 1] = { text = p.bilgi, eylem = "bilgi", dim = true } end
             t[#t + 1] = { text = T(p.onay_metni or _("Seçilenleri gönder (%1)"), secili), bold = true, eylem = "onay" }
-            t[#t + 1] = { text = _("Tümünü seç"), eylem = "hepsi" }
+            if p.aranabilir then
+                if filtre then
+                    t[#t + 1] = { text = T(_("Arama: %1 · temizle"), p._arama_metni or ""), eylem = "temizle" }
+                else
+                    t[#t + 1] = { text = _("Listede ara…"), eylem = "ara" }
+                end
+            end
+            t[#t + 1] = { text = filtre and _("Görünenlerin hepsini seç") or _("Tümünü seç"), eylem = "hepsi" }
             t[#t + 1] = { text = _("Hiçbirini seçme"), eylem = "hicbiri", separator = true }
             for i, o in ipairs(p.ogeler) do
-                t[#t + 1] = { text = (o.secili and "☑ " or "☐ ") .. o.metin, mandatory = o.ek, indeks = i }
+                if gorunur(o) then
+                    t[#t + 1] = { text = (o.secili and "☑ " or "☐ ") .. o.metin, mandatory = o.ek, indeks = i }
+                end
+            end
+            if filtre and #t == (p.bilgi and 5 or 4) then
+                t[#t + 1] = { text = _("Aramaya uyan kitap yok."), eylem = "bilgi" }
             end
             return t
+        end
+        local function yenile(m, indeks)
+            local t = itemler()
+            local sira = 1
+            if indeks then
+                for i, it in ipairs(t) do if it.indeks == indeks then sira = i; break end end
+            end
+            local ok = pcall(function() m:switchItemTable(nil, t, sira) end)
+            if not ok then
+                UIManager:close(m)
+                self:secimListesi(p)
+            end
         end
         menu = Menu:new{
             title = p.baslik,
@@ -75,18 +105,36 @@ return function(BinKitap)
                     UIManager:close(m)
                     p.onay(veriler)
                     return true
+                elseif item.eylem == "ara" then
+                    local dialog
+                    dialog = InputDialog:new{
+                        title = _("Listede ara"),
+                        input = p._arama_metni or "",
+                        buttons = {{
+                            { text = _("Vazgeç"), id = "close", callback = function() UIManager:close(dialog) end },
+                            { text = _("Ara"), is_enter_default = true, callback = function()
+                                local q = kirp(dialog:getInputText())
+                                UIManager:close(dialog)
+                                p._arama_metni = q ~= "" and q or nil
+                                filtre = q ~= "" and Y.normal(q) or nil
+                                yenile(m)
+                            end },
+                        }},
+                    }
+                    UIManager:show(dialog)
+                    dialog:onShowKeyboard()
+                    return true
+                elseif item.eylem == "temizle" then
+                    filtre, p._arama_metni = nil, nil
                 elseif item.eylem == "hepsi" or item.eylem == "hicbiri" then
-                    for _i, o in ipairs(p.ogeler) do o.secili = (item.eylem == "hepsi") end
+                    for _i, o in ipairs(p.ogeler) do
+                        if gorunur(o) then o.secili = (item.eylem == "hepsi") end
+                    end
                 elseif item.indeks then
                     local o = p.ogeler[item.indeks]
                     o.secili = not o.secili
                 end
-                local sira = item.indeks and (item.indeks + 3 + ust) or 1
-                local ok = pcall(function() m:switchItemTable(nil, itemler(), sira) end)
-                if not ok then
-                    UIManager:close(m)
-                    self:secimListesi(p)
-                end
+                yenile(m, item.indeks)
                 return true
             end,
             close_callback = function() UIManager:close(menu) end,
@@ -567,6 +615,63 @@ return function(BinKitap)
         }
     end
 
+    --- Okuyacaklarıma ekle: dosya tarayıcısına bağlı olmayan giriş (SimpleUI gibi arayüzlerde de çalışır).
+    function BinKitap:okuyacaklaraEkle()
+        if not Api:kimlikVar() then return self:kimlikUyarisi() end
+        local secili = self:seciliDosyalar()
+        local dialog
+        local function kapatVe(f) return function() UIManager:close(dialog); f() end end
+        local satirlar = {}
+        if secili and #secili > 0 then
+            satirlar[#satirlar + 1] = {{ text = T(_("Dosya tarayıcısında seçtiklerim (%1)"), #secili),
+                callback = kapatVe(function() self:topluDurumEkle(secili, Api.DURUM.okuyacagim) end) }}
+        end
+        satirlar[#satirlar + 1] = {{ text = _("Kobo'daki kitaplarımdan seç"), callback = kapatVe(function() self:okuyacaklaraKobodan() end) }}
+        satirlar[#satirlar + 1] = {{ text = _("1000Kitap'ta ara (Kobo'da olmayan kitap)"), callback = kapatVe(function() self:okuyacaklaraAra() end) }}
+        satirlar[#satirlar + 1] = {{ text = _("Kapat"), callback = function() UIManager:close(dialog) end }}
+        dialog = ButtonDialog:new{
+            title = _("1000Kitap'ta Okuyacaklarıma ekle\n\nOkuduğun ya da okumakta olduğun kitaplara dokunulmaz."),
+            buttons = satirlar,
+        }
+        UIManager:show(dialog)
+    end
+
+    function BinKitap:okuyacaklaraKobodan()
+        local bekle = self:bekle(_("Kitapların taranıyor…"))
+        local liste = Y.kitapDosyalari(evDizini(), true, 5000)
+        UIManager:close(bekle)
+        if #liste == 0 then return self:bildir(_("Kobo'da kitap bulunamadı.")) end
+        local ogeler = {}
+        for _i, yol in ipairs(liste) do
+            local klasor = yol:match("^(.*)/[^/]+$") or ""
+            ogeler[#ogeler + 1] = { metin = dosyaAdi(yol), ek = dosyaAdi(klasor), secili = false, veri = yol }
+        end
+        table.sort(ogeler, function(x, y) return Y.normal(x.metin) < Y.normal(y.metin) end)
+        self:secimListesi{
+            baslik = _("Okuyacaklarıma eklenecek kitaplar"),
+            ogeler = ogeler,
+            aranabilir = true,
+            onay_metni = _("Seçilenleri ekle (%1)"),
+            onay = function(yollar) self:topluDurumEkle(yollar, Api.DURUM.okuyacagim) end,
+        }
+    end
+
+    function BinKitap:okuyacaklaraAra()
+        self:aramaPenceresi("", function(kitap)
+            self:siraya({
+                tur = "durum", kitap_id = kitap.id, kitap_adi = kitap.adi,
+                durum = Api.DURUM.okuyacagim, sadece_bossa = true,
+            })
+            self:bildir(T(_("“%1” Okuyacaklarına eklenecek."), kitap.adi), 2)
+            NetworkMgr:runWhenOnline(function() self:kuyruguGonder(true) end)
+        end, _("Okuyacaklarına eklenecek kitabı ara"))
+    end
+
+    function BinKitap:onBinKitapOkuyacaklaraEkle()
+        self:okuyacaklaraEkle()
+        return true
+    end
+
     --- Dosyaları eşleştirir (eşleşmiş olanları tekrar aramaz) ve durumlarını sıraya alır.
     function BinKitap:topluDurumEkle(yollar, durum)
         local eslesmis, aranacak = {}, {}
@@ -577,12 +682,14 @@ return function(BinKitap)
 
         local function sirala(liste)
             if #liste == 0 then return self:bildir(_("Eklenecek kitap yok.")) end
+            local ogeler = {}
             for _i, e in ipairs(liste) do
-                self:siraya({
+                ogeler[#ogeler + 1] = {
                     tur = "durum", kitap_id = e.kitap.id, kitap_adi = e.kitap.adi, durum = durum,
                     sadece_bossa = (durum == Api.DURUM.okuyacagim) or nil,
-                })
+                }
             end
+            self:topluSiraya(ogeler)
             self:bildir(T(_("%1 kitap sıraya alındı. Okuduğun ya da okumakta olduğun kitaplara dokunulmaz."), #liste))
             NetworkMgr:runWhenOnline(function() self:kuyruguGonder(false) end)
         end

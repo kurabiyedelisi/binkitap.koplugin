@@ -113,6 +113,10 @@ function BinKitap:onDispatcherRegisterActions()
         category = "none", event = "BinKitapIletiYaz",
         title = _("1000Kitap: ileti yaz"), general = true,
     })
+    Dispatcher:registerAction("binkitap_okuyacaklara_ekle", {
+        category = "none", event = "BinKitapOkuyacaklaraEkle",
+        title = _("1000Kitap: Okuyacaklarıma ekle"), general = true,
+    })
     Dispatcher:registerAction("binkitap_ne_okusam", {
         category = "none", event = "BinKitapNeOkusam",
         title = _("1000Kitap: ne okusam?"), general = true,
@@ -1757,11 +1761,12 @@ function BinKitap:menuOgeleri()
                 separator = true,
             }
         end
-    elseif self.topluOkuyacagim then
+    end
+    if self.okuyacaklaraEkle then
         ogeler[#ogeler + 1] = {
-            text = _("Kitapları \"Okuyacağım\" olarak ekle"),
-            callback = function() self:topluOkuyacagim() end,
-            help_text = _("Dosya tarayıcısında \"Seç\" ile kitap seçtiysen onları, seçmediysen bu klasördeki kitapları listeler."),
+            text = _("Okuyacaklarıma ekle"),
+            callback = function() self:okuyacaklaraEkle() end,
+            help_text = _("Kobo'daki kitaplarından seçerek ya da 1000Kitap'ta arayarak \"Okuyacağım\" listene ekler. Okuduğun ya da okumakta olduğun kitaplara dokunulmaz."),
         }
     end
     if self.kutuphaneEslestir then
