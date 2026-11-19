@@ -6,6 +6,7 @@ okuma seansları, renkle otomatik gönderim, gönderim sırası, menü.
 Dosya tarayıcısı ve toplu işler: binkitap_toplu.lua
 Keşif (ne okusam, koleksiyon, bilgi kartı, hedef, uyku ekranı): binkitap_kesif.lua
 GitHub'dan güncelleme: binkitap_guncelle.lua
+İleti yazma: binkitap_ileti.lua
 ]]
 
 local ButtonDialog = require("ui/widget/buttondialog")
@@ -107,6 +108,10 @@ function BinKitap:onDispatcherRegisterActions()
     Dispatcher:registerAction("binkitap_simdi_gonder", {
         category = "none", event = "BinKitapSimdiGonder",
         title = _("1000Kitap: bekleyenleri gönder"), general = true,
+    })
+    Dispatcher:registerAction("binkitap_ileti_yaz", {
+        category = "none", event = "BinKitapIletiYaz",
+        title = _("1000Kitap: ileti yaz"), general = true,
     })
     Dispatcher:registerAction("binkitap_ne_okusam", {
         category = "none", event = "BinKitapNeOkusam",
@@ -240,12 +245,15 @@ function BinKitap:kitapBilgisi()
 end
 
 --- Bir dosyanın eşleşmesini eklenti ayarlarına yazar (açık olmasa da).
-function BinKitap:eslesmeKaydet(yol, kitap)
+-- ertele: ayar dosyasını hemen yazma (toplu işlerde arada bir yazılır)
+function BinKitap:eslesmeKaydet(yol, kitap, ertele)
     if not yol or not kitap or not kitap.id then return end
     local eslesmeler = self.settings:readSetting("eslesmeler") or {}
     local onceki = eslesmeler[yol]
-    if self.settings:isTrue("kitapliga_ekle") and (not onceki or onceki.id ~= kitap.id) then
-        if onceki then
+    local yeni_onay = onceki and onceki.otomatik and not kitap.otomatik and onceki.id == kitap.id
+    if self.settings:isTrue("kitapliga_ekle") and not kitap.otomatik
+            and (not onceki or onceki.id ~= kitap.id or yeni_onay) then
+        if onceki and onceki.id ~= kitap.id then
             -- sadece eklentinin kendi eklediği eski baskıyı çıkar; kullanıcının önceden kitaplığında olana dokunma
             self:siraya({ tur = "kitaplik_cikar", kitap_id = onceki.id, kitap_adi = onceki.adi, otomatik = true })
         end
@@ -256,12 +264,13 @@ function BinKitap:eslesmeKaydet(yol, kitap)
         atlanan[yol] = nil
         self.settings:saveSetting("kutuphane_atlanan", atlanan)
     end
-    eslesmeler[yol] = { id = kitap.id, adi = kitap.adi, yazar = kitap.yazar, basili_sayfa = kitap.basili_sayfa, yayinevi = kitap.yayinevi }
+    eslesmeler[yol] = { id = kitap.id, adi = kitap.adi, yazar = kitap.yazar, basili_sayfa = kitap.basili_sayfa,
+        yayinevi = kitap.yayinevi, otomatik = kitap.otomatik or nil }
     self.settings:saveSetting("eslesmeler", eslesmeler)
     local dosyalar = self.settings:readSetting("kitap_dosyalari") or {}
     dosyalar[tostring(kitap.id)] = yol
     self.settings:saveSetting("kitap_dosyalari", dosyalar)
-    self.settings:flush()
+    if not ertele then self.settings:flush() end
 end
 
 function BinKitap:dosyaEslesmesi(yol)
@@ -452,6 +461,46 @@ function BinKitap:sonucListesi(q, sonuclar, secildi, ek_dugmeler)
     UIManager:show(dialog)
 end
 
+--- Gözden geçirmede toplu onaylanan (otomatik) eşleşmeyi kitap açılınca doğrulatır.
+-- devam(kitap): eşleşme doğrulandıktan ya da değiştirildikten sonra çağrılır.
+function BinKitap:otomatikEslesmeSor(kitap, devam)
+    local dialog
+    local function sonra()
+        if devam then
+            local k = self:kitapBilgisi()
+            if k and not k.otomatik then devam(k) end
+        end
+    end
+    dialog = ButtonDialog:new{
+        title = T(_("Bu kitap 1000Kitap'ta otomatik eşleştirildi:\n\n%1\n\nYanlış olabilir. Doğrulayana kadar bu kitap için durum, ilerleme ve renkli vurgular kendiliğinden gönderilmez."),
+            BinKitap.kitapEtiketi(kitap)),
+        title_align = "left",
+        buttons = {
+            {
+                { text = _("Doğru"), callback = function()
+                    UIManager:close(dialog)
+                    kitap.otomatik = nil
+                    self:kitapKaydetAyar(kitap)
+                    self:bildir(_("Eşleşme onaylandı."), 2)
+                    sonra()
+                end },
+                { text = _("Baskıyı değiştir"), callback = function()
+                    UIManager:close(dialog)
+                    self:baskiSec()
+                end },
+            },
+            {
+                { text = _("Başka kitap ara"), callback = function()
+                    UIManager:close(dialog)
+                    self:kitapEslestir(sonra)
+                end },
+                { text = _("Sonra"), callback = function() UIManager:close(dialog) end },
+            },
+        },
+    }
+    UIManager:show(dialog)
+end
+
 function BinKitap:kitapSecildi(s, sonra)
     local eski = self:kitapBilgisi()
     local kitap = { id = s.id, adi = s.adi, yazar = s.yazar, basili_sayfa = s.basili_sayfa, yayinevi = s.yayinevi }
@@ -504,6 +553,7 @@ function BinKitap:baskiSec(sayfalama_bilgisi, onceki)
                     UIManager:close(dialog)
                     kitap.id, kitap.adi, kitap.basili_sayfa = b.id, b.adi, b.sayfa or kitap.basili_sayfa
                     kitap.yayinevi = b.yayinevi
+                    kitap.otomatik = nil -- baskıyı kendin seçtin: eşleşme onaylandı
                     self:kitapKaydetAyar(kitap)
                     self:bildir(T(_("Baskı: %1"), etiket), 2)
                 end,
@@ -588,6 +638,7 @@ function BinKitap:yeniAlinti(metin, pos, pageno, not_metni, on_sirada)
     self:alintiPenceresi({
         kitap_id = kitap.id,
         kitap_adi = kitap.adi,
+        otomatik = kitap.otomatik,
         soz = metin,
         sayfa = sayfa and tostring(sayfa) or "",
         ekbilgi = not_metni or "",
@@ -606,7 +657,7 @@ end
 
 function BinKitap:alintiPenceresi(taslak)
     local satirlar = {
-        taslak.kitap_adi, "",
+        taslak.kitap_adi .. (taslak.otomatik and _(" (otomatik eşleşme, onaylanmadı)") or ""), "",
         "“" .. kisalt(taslak.soz, 700) .. "”", "",
         T(_("Sayfa: %1"), taslak.sayfa ~= "" and taslak.sayfa or "—"),
     }
@@ -648,6 +699,12 @@ function BinKitap:alintiPenceresi(taslak)
     UIManager:show(dialog)
 end
 
+--- Alıntı ya da ileti taslağının penceresine döner.
+function BinKitap:taslakPenceresi(taslak)
+    if taslak.ileti then return self:iletiPenceresi(taslak) end
+    return self:alintiPenceresi(taslak)
+end
+
 function BinKitap:alanDuzenle(taslak, alan, baslik, cok_satir)
     local dialog
     dialog = InputDialog:new{
@@ -660,7 +717,7 @@ function BinKitap:alanDuzenle(taslak, alan, baslik, cok_satir)
                 text = _("Geri"), id = "close",
                 callback = function()
                     UIManager:close(dialog)
-                    self:alintiPenceresi(taslak)
+                    self:taslakPenceresi(taslak)
                 end,
             },
             {
@@ -668,7 +725,7 @@ function BinKitap:alanDuzenle(taslak, alan, baslik, cok_satir)
                 callback = function()
                     taslak[alan] = kirp(dialog:getInputText())
                     UIManager:close(dialog)
-                    self:alintiPenceresi(taslak)
+                    self:taslakPenceresi(taslak)
                 end,
             },
         }},
@@ -686,17 +743,17 @@ function BinKitap:konuSec(taslak)
             { text = _("Konu yok"), callback = function()
                 UIManager:close(dialog)
                 taslak.konu_id, taslak.konu_adi = nil, nil
-                self:alintiPenceresi(taslak)
+                self:taslakPenceresi(taslak)
             end },
             { text = _("Ara"), is_enter_default = true, callback = function()
                 local q = kirp(dialog:getInputText())
                 UIManager:close(dialog)
-                if q == "" then return self:alintiPenceresi(taslak) end
+                if q == "" then return self:taslakPenceresi(taslak) end
                 NetworkMgr:runWhenOnline(function()
                     local liste, err = Api:konuAra(q)
                     if not liste then
                         self:hataGoster(err)
-                        return self:alintiPenceresi(taslak)
+                        return self:taslakPenceresi(taslak)
                     end
                     local secim
                     local buttons = {}
@@ -705,12 +762,12 @@ function BinKitap:konuSec(taslak)
                         buttons[#buttons + 1] = {{ text = k.adi, align = "left", callback = function()
                             UIManager:close(secim)
                             taslak.konu_id, taslak.konu_adi = k.id, k.adi
-                            self:alintiPenceresi(taslak)
+                            self:taslakPenceresi(taslak)
                         end }}
                     end
                     buttons[#buttons + 1] = {{ text = _("Geri"), callback = function()
                         UIManager:close(secim)
-                        self:alintiPenceresi(taslak)
+                        self:taslakPenceresi(taslak)
                     end }}
                     secim = ButtonDialog:new{ title = _("Konu seç"), buttons = buttons }
                     UIManager:show(secim)
@@ -734,12 +791,12 @@ function BinKitap:yorumAyariSec(taslak)
                 taslak.yorum_ayari = y.kod
                 self.settings:saveSetting("yorum_ayari", y.kod)
                 self.settings:flush()
-                self:alintiPenceresi(taslak)
+                self:taslakPenceresi(taslak)
             end,
         }}
     end
     dialog = ButtonDialog:new{
-        title = _("Kimler yorum yapıp alıntılayabilir?\n(Seçimin sonraki alıntılar için de hatırlanır.)"),
+        title = _("Kimler yorum yapıp alıntılayabilir?\n(Seçimin sonraki alıntı ve iletiler için de hatırlanır.)"),
         buttons = buttons,
     }
     UIManager:show(dialog)
@@ -798,7 +855,7 @@ function BinKitap:renkTaramasi()
     local eylemler = self.settings:readSetting("renk_eylemleri")
     if type(eylemler) ~= "table" or next(eylemler) == nil then return 0 end
     local kitap = self:kitapBilgisi()
-    if not kitap then return 0 end
+    if not kitap or kitap.otomatik then return 0 end -- onaylanınca gönderilir
     local liste = self.ui.annotation and self.ui.annotation.annotations
     if type(liste) ~= "table" then return 0 end
     if not kitap.renk_baslangic then
@@ -847,6 +904,10 @@ end
 --- Otomatik (kullanıcı istemeden) yapılan durum değişikliği; istenirse önce sorar.
 function BinKitap:otomatikDurum(kitap, durum, secenekler)
     secenekler = secenekler or {}
+    if kitap.otomatik then
+        logger.info("1000Kitap: onaylanmamış otomatik eşleşme, durum gönderilmedi", kitap.id, durum)
+        return
+    end
     local function sirala()
         self:siraya({
             tur = "durum", kitap_id = kitap.id, kitap_adi = kitap.adi, durum = durum,
@@ -914,6 +975,9 @@ end
 function BinKitap:bitisEkrani()
     local kitap = self:kitapBilgisi()
     if not kitap or kitap.okudum_islendi or not self.settings:nilOrTrue("bitis_ekrani") then return end
+    if kitap.otomatik then
+        return self:otomatikEslesmeSor(kitap, function() self:bitisEkrani() end)
+    end
     self:bitisPenceresi(kitap, { puan = nil, inceleme = "" })
 end
 
@@ -983,7 +1047,7 @@ end
 function BinKitap:koDurumuKontrol()
     if not self.settings:nilOrTrue("durum_senkron") then return end
     local kitap = self:kitapBilgisi()
-    if not kitap then return end
+    if not kitap or kitap.otomatik then return end -- onaylanınca işlenir
     local ozet = self.ui.doc_settings:readSetting("summary")
     local st = type(ozet) == "table" and ozet.status or nil
     if not st then return end
@@ -1008,6 +1072,7 @@ end
 ---------------------------------------------------------------------------
 
 function BinKitap:ilerlemeSirala(kitap)
+    if kitap.otomatik then return end
     local yuzde = self:mevcutYuzde()
     if not yuzde then return end
     self:siraya({ tur = "ilerleme", kitap_id = kitap.id, kitap_adi = kitap.adi,
@@ -1036,7 +1101,7 @@ function BinKitap:seansBitir()
     if not s or s.toplam < SEANS_ALT_SINIR or not self.settings:isTrue("seans_kaydi") then return false end
     local kitap = self:kitapBilgisi()
     local yuzde = self:mevcutYuzde()
-    if not kitap or not yuzde then return false end
+    if not kitap or not yuzde or kitap.otomatik then return false end
     self:siraya({
         tur = "seans", kitap_id = kitap.id, kitap_adi = kitap.adi,
         sure = math.min(s.toplam, SEANS_UST_SINIR), yuzde = yuzde,
@@ -1103,6 +1168,10 @@ function BinKitap:ogeGonder(oge)
         })
     elseif oge.tur == "ozel_not" then
         return Api:ozelNotEkle(oge.kitap_id, oge.metin, oge.anahtar)
+    elseif oge.tur == "ileti" then
+        return Api:iletiEkle(oge.metin, {
+            baslik = oge.baslik, konu_id = oge.konu_id, konu_adi = oge.konu_adi, yorum_ayari = oge.yorum_ayari,
+        })
     elseif oge.tur == "puan" then
         return Api:puanVer(oge.kitap_id, oge.puan)
     elseif oge.tur == "inceleme" then
@@ -1165,7 +1234,7 @@ function BinKitap:ogeGonder(oge)
 end
 
 local OZET_METNI = {
-    alinti = "%1 alıntı gönderildi.", ozel_not = "%1 özel not gönderildi.",
+    alinti = "%1 alıntı gönderildi.", ozel_not = "%1 özel not gönderildi.", ileti = "%1 ileti paylaşıldı.",
     puan = "%1 puan gönderildi.", inceleme = "%1 inceleme gönderildi.",
     ilerleme = "%1 ilerleme gönderildi.", seans = "%1 okuma seansı gönderildi.",
     kitaplik_ekle = "%1 kitap kitaplığına eklendi.", kitaplik_cikar = "%1 kitap kitaplığından çıkarıldı.",
@@ -1248,9 +1317,12 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
             end
         else
             local ozet = (oge.tur == "alinti" and kisalt(oge.soz or "", 60))
-                or (oge.tur == "ozel_not" and kisalt(oge.metin or "", 60))
+                or ((oge.tur == "ozel_not" or oge.tur == "ileti") and kisalt(oge.metin or "", 60))
                 or (oge.kitap_adi or "")
             hatalar[#hatalar + 1] = T(_("Gönderilemedi (%1): %2"), ozet, err or "?")
+            if oge.tur == "ileti" and self.iletiGeriAl and self:iletiGeriAl(oge) then
+                hatalar[#hatalar + 1] = _("İletin kaybolmadı: \"İleti yaz\"ı açınca taslak olarak duruyor.")
+            end
         end
         if #k > 0 then
             UIManager:scheduleIn(GONDERIM_ARALIGI, sonraki)
@@ -1307,9 +1379,18 @@ function BinKitap:onReaderReady()
                 end
             end)
         end
-        self:koDurumuKontrol()
-        if self.settings:nilOrTrue("acilista_okuyorum") and not kitap.okuyorum_islendi then
-            self:okuyorumSirala(kitap)
+        local function acilisIsleri(k)
+            self:koDurumuKontrol()
+            if self.settings:nilOrTrue("acilista_okuyorum") and not k.okuyorum_islendi then
+                self:okuyorumSirala(k)
+            end
+        end
+        if kitap.otomatik then
+            UIManager:scheduleIn(1, function()
+                if self.ui.document then self:otomatikEslesmeSor(kitap, acilisIsleri) end
+            end)
+        else
+            acilisIsleri(kitap)
         end
     elseif Api:kimlikVar() and NetworkMgr:isOnline() then
         -- ISBN ya da Calibre kimliği varsa sormadan eşleştir
@@ -1588,8 +1669,9 @@ function BinKitap:menuOgeleri()
             text_func = function()
                 local k = self:kitapBilgisi()
                 if not k then return _("Kitabı 1000Kitap'ta eşleştir") end
-                if k.yayinevi and k.yayinevi ~= "" then return T(_("Kitap: %1 (%2)"), k.adi, k.yayinevi) end
-                return T(_("Kitap: %1"), k.adi)
+                local ek = k.otomatik and _(" · otomatik, onaylanmadı") or ""
+                if k.yayinevi and k.yayinevi ~= "" then return T(_("Kitap: %1 (%2)"), k.adi, k.yayinevi) .. ek end
+                return T(_("Kitap: %1"), k.adi) .. ek
             end,
             keep_menu_open = true,
             callback = function(touchmenu_instance)
@@ -1664,6 +1746,15 @@ function BinKitap:menuOgeleri()
         }
         ogeler[#ogeler + 1] = { text = _("Okuma hedefi"), sub_item_table_func = function() return self:hedefMenusu() end }
     end
+    if self.iletiYaz then
+        ogeler[#ogeler + 1] = {
+            text_func = function()
+                return self:iletiTaslagi() and _("İleti yaz (taslak var)") or _("İleti yaz")
+            end,
+            callback = function() self:iletiYaz() end,
+            help_text = _("Alıntı değil, kendi yazını 1000Kitap'ta ileti olarak paylaşır. Okuduğun kitabı etiketleyebilirsin."),
+        }
+    end
     ogeler[#ogeler + 1] = self:bekleyenlerMenuOgesi()
     ogeler[#ogeler + 1] = { text = _("Ayarlar"), sub_item_table_func = function() return self:ayarlarMenusu() end }
     return ogeler
@@ -1673,5 +1764,6 @@ end
 yukle("binkitap_toplu")(BinKitap)
 yukle("binkitap_kesif")(BinKitap)
 yukle("binkitap_guncelle")(BinKitap)
+yukle("binkitap_ileti")(BinKitap)
 
 return BinKitap

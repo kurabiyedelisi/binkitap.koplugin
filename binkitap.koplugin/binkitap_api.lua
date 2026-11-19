@@ -553,6 +553,29 @@ function Api:alintiEkle(kitap_id, soz, sayfa, ekbilgi, secenekler)
     }, true)
 end
 
+--- Herkese açık ileti (gönderi). Bir kitabı etiketlemek için metne "#k:<kitap id>" eklenir.
+-- secenekler = { baslik, konu_id, konu_adi, yorum_ayari }
+function Api:iletiEkle(metin, secenekler)
+    secenekler = secenekler or {}
+    return self:istek("POST", "iletiler/iletiEkle", nil, {
+        { "id", "" },
+        { "konuId", secenekler.konu_id or "" },
+        { "konuAdi", secenekler.konu_adi or "" },
+        { "gonderiId", "" },
+        { "ileti", metin },
+        { "anket", "" },
+        { "baslik", secenekler.baslik or "" },
+        { "yorumAyari", secenekler.yorum_ayari or 0 },
+        { "resimIdler", "" },
+        { "koleksiyonId", "" },
+        { "ekKulupId", "" },
+        { "anonimSoru", 0 },
+        { "anonimSoruAkimi", 0 },
+        { "anonimSoruMisafir", 1 },
+        { "yorumOnayi", 0 },
+    }, true)
+end
+
 function Api:ozelNotEkle(kitap_id, not_metni, anahtar)
     return self:istek("POST", "koleksiyonlar/not-ayarla", nil, {
         { "hedefTuru", "kitap" },

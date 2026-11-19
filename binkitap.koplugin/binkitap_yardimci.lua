@@ -137,10 +137,20 @@ function Y.kitapDosyalari(dizin, alt_klasorler, en_fazla)
     return sonuc
 end
 
+--- Kapak tarayıcısının (Cover Browser) önbelleğindeki bilgi; belge açmaz, hızlıdır.
+local function onbellektenBilgi(yol)
+    local ok, BookInfoManager = pcall(require, "bookinfomanager")
+    if not ok or type(BookInfoManager) ~= "table" or not BookInfoManager.getBookInfo then return nil end
+    local ok2, bi = pcall(BookInfoManager.getBookInfo, BookInfoManager, yol, false)
+    if not ok2 or type(bi) ~= "table" or bi.ignore_meta or not bi.title then return nil end
+    return { title = bi.title, authors = bi.authors, identifiers = bi.identifiers, keywords = bi.keywords }
+end
+
 --- Açık olmayan bir dosyanın başlık/yazar/ISBN bilgisi.
--- Önce verilen book_props, sonra yan dosyadaki doc_props, sonra KOReader'ın
--- kitap bilgisi modülü, en son dosya adı kullanılır.
-function Y.dosyaBilgisi(ui, yol, book_props)
+-- Önce verilen book_props, sonra yan dosyadaki doc_props, sonra kapak tarayıcısının
+-- önbelleği, sonra KOReader'ın kitap bilgisi modülü, en son dosya adı kullanılır.
+-- hafif: belgeyi asla açma (toplu işlerde cihazı kilitlememek için).
+function Y.dosyaBilgisi(ui, yol, book_props, hafif)
     local props
     if type(book_props) == "table" and (book_props.title or book_props.display_title) then
         props = book_props
@@ -158,7 +168,8 @@ function Y.dosyaBilgisi(ui, yol, book_props)
             end
         end
     end
-    if not props and ui and ui.bookinfo and ui.bookinfo.getDocProps then
+    if not props then props = onbellektenBilgi(yol) end
+    if not props and not hafif and ui and ui.bookinfo and ui.bookinfo.getDocProps then
         local ok, p = pcall(ui.bookinfo.getDocProps, ui.bookinfo, yol, nil, true)
         if ok and type(p) == "table" then props = p end
     end

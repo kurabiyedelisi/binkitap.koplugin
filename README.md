@@ -1,146 +1,129 @@
-# 1000Kitap eklentisi (KOReader) — v0.2.3
+# 1000Kitap için KOReader eklentisi
 
-Okuduğun kitapları, alıntılarını ve okuma ilerlemeni KOReader'dan 1000Kitap hesabına gönderir.
-Resmi bir eklenti değildir. 1000Kitap'ın web sitesinin kullandığı iç API ile çalışır; site
-değişirse eklentinin de güncellenmesi gerekebilir. Kullanılan uç noktalar `binkitap_api.lua`
-dosyasının başında listelenmiştir.
+Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1000Kitap hesabınla senkron tutar: okuma durumun, alıntıların, puanın, kitaplığın ve iletilerin, kitabı bırakmadan 1000Kitap'a gider.
 
-## İndirme
+> Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-Bu sayfadaki yeşil **Code → Download ZIP** düğmesiyle depoyu indir ve aç. İçindeki
-`binkitap.koplugin` klasörü eklentinin kendisidir; Kobo'ya sadece onu kopyala.
+**Sürüm:** 0.2.4 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+
+## Neler yapar
+
+- **Kitabını tanır.** ISBN'den ya da Calibre'de eklediğin `1000kitap:<id>` etiketinden doğru baskıyı sormadan bulur. Bulamazsa yayınevleriyle birlikte seçenek sunar.
+- **Alıntılarını gönderir.** Metni seç, "1000Kitap'a gönder"e dokun. Sayfa numarası basılı baskıya göre hesaplanır. İstersen özel not olarak da gönderebilirsin.
+- **Renge göre kendiliğinden gönderir.** Örneğin sarı vurgular herkese açık alıntı, mavi vurgular özel not olarak gider.
+- **İleti yazdırır.** Alıntı olmayan kendi yazını 1000Kitap'ta ileti olarak paylaşabilirsin, okuduğun kitabı etiketleyerek.
+- **Okuma durumunu takip eder.** Kitabı açınca "Okuyorum" yapar. Kitap bitince tek ekranda "Okudum", puan ve kısa inceleme alır.
+- **Bütün kütüphaneni eşleştirir.** Kobo'daki kitapları 1000Kitap'taki karşılıklarıyla eşleştirir, emin olamadıklarını sana sorar.
+- **1000Kitap kitaplığını yönetir.** Kobo'daki kitapları kitaplığına seçerek ekler, seçtiklerini çıkarır.
+- **Keşfetmene yardım eder.** Ne okusam?, Okuyacaklarım koleksiyonu, popüler alıntılar, okuma hedefi var. Uyku ekranında kendi alıntılarından birini gösterebilir.
+- **İnternet olmadan da çalışır.** Wi-Fi kapalıyken yaptıkların sıraya girer, bağlanınca gönderilir.
+- **Kendini günceller.** Yeni sürüm çıktığında sorar, onay verirsen kurar.
 
 ## Kurulum
 
-1. Kobo'yu USB ile bilgisayara bağla.
-2. `binkitap.koplugin` klasörünü Kobo'daki `.adds/koreader/plugins/` klasörüne kopyala.
-   (`.adds` gizli bir klasördür; Mac'te Finder'da `Cmd+Shift+.` ile görünür olur.)
-3. Aşağıdaki adımlarla `ayar.lua` dosyasını oluştur ve aynı klasöre koy.
-4. Kobo'yu güvenli çıkar, KOReader'ı yeniden başlat.
-5. **Araçlar (anahtar simgesi) → 1000Kitap → Ayarlar → Bağlantıyı test et.**
+1. Bu sayfadaki yeşil **Code → Download ZIP** düğmesiyle indir ve zip'i aç.
+2. Kobo'yu USB ile bilgisayara bağla.
+3. İçinden çıkan `binkitap.koplugin` klasörünü Kobo'daki `.adds/koreader/plugins/` klasörüne kopyala.
+   `.adds` gizli bir klasördür; Mac'te Finder'da `Cmd+Shift+.` ile görünür olur.
+4. Aşağıdaki adımlarla hesabını bağla.
+5. Kobo'yu güvenli çıkar ve KOReader'ı yeniden başlat.
 
-KOReader 2024.07 ya da daha yeni bir sürüm gerekir.
+## Hesabını bağlama
 
-## Hesap kodlarını alma
-
-Eklenti şifreni kullanmaz; tarayıcındaki 1000Kitap oturumunun kodlarını kullanır.
+Eklenti şifreni istemez; tarayıcındaki 1000Kitap oturumunu kullanır. Bunu bir kez yaparsın.
 
 1. Bilgisayarda Chrome'la 1000kitap.com'a giriş yap.
 2. `F12` (Mac'te `Cmd+Option+J`) ile **Console** sekmesini aç.
-3. Aşağıdaki satırı yapıştırıp Enter'a bas. Chrome yapıştırmaya izin vermezse önce
-   `allow pasting` yaz, Enter'a bas, sonra tekrar yapıştır.
+3. Aşağıdaki satırı yapıştırıp Enter'a bas. Chrome yapıştırmaya izin vermezse önce `allow pasting` yazıp Enter'a bas, sonra tekrar yapıştır.
 
-```
-(()=>{const c=n=>decodeURIComponent((document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'))||[])[1]||'');const p=[...document.querySelectorAll('a')].find(a=>a.textContent.trim()==='Profil');const k=p?p.getAttribute('href').replace(/^\//,''):'';copy(`return {\n    oturum_kodu = "${c('oturumkodube')}",\n    cihaz_kodu = "${c('cik-v2be')}",\n    kullanici_adi = "${k}",\n}\n`);return 'ayar.lua içeriği panoya kopyalandı'+(k?'':' (kullanıcı adı bulunamadı, elle ekle)')})()
-```
+   ```js
+   (()=>{const c=n=>decodeURIComponent((document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'))||[])[1]||'');const p=[...document.querySelectorAll('a')].find(a=>a.textContent.trim()==='Profil');const k=p?p.getAttribute('href').replace(/^\//,''):'';copy(`return {\n    oturum_kodu = "${c('oturumkodube')}",\n    cihaz_kodu = "${c('cik-v2be')}",\n    kullanici_adi = "${k}",\n}\n`);return 'ayar.lua içeriği panoya kopyalandı'+(k?'':' (kullanıcı adı bulunamadı, elle ekle)')})()
+   ```
 
-4. Eklenti klasöründe `ayar.lua` adında bir dosya oluştur ve panodakini içine yapıştır.
+4. Kobo'daki `binkitap.koplugin` klasöründe `ayar.lua` adlı bir dosya oluştur ve panodakini içine yapıştır.
 
-Kodları Kobo'da da girebilirsin: **1000Kitap → Ayarlar → Hesap bilgileri.**
+Kodları Kobo'da da girebilirsin: **Araçlar → 1000Kitap → Ayarlar → Hesap bilgileri.** Doğru girdiğini **Bağlantıyı test et** ile kontrol et.
 
-**Dikkat:**
-- Bu kodlar hesabının anahtarıdır, kimseyle paylaşma.
-- Tarayıcıda 1000Kitap'tan **çıkış yaparsan** bu oturum kapanır. Kobo'ya ayrı bir oturum
-  vermek için gizli pencerede giriş yap, kodları oradan al, pencereyi çıkış yapmadan kapat.
-- Oturum kapanırsa eklenti uyarır; bekleyen gönderiler kaybolmaz.
+Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "giriş yapınız" uyarısı verir. Bunu önlemek için kodları gizli bir pencerede giriş yaparak al, pencereyi çıkış yapmadan kapat.
 
-## Özellikler
+## İlk adımlar
+
+1. **Kütüphaneni eşleştir:** Dosya tarayıcısında **Araçlar → 1000Kitap → Kütüphaneyi eşleştir.** Okuma durumlarına dokunmaz.
+2. **Emin olunamayanları gözden geçir:** Her kitap için doğru baskıyı seç. Çok kitap varsa "Tek adaylıları otomatik onayla" ya da "Hepsini ilk adayla onayla" ile hızlıca geç.
+3. **İstersen renk ata:** **Ayarlar → Renkle otomatik gönderim.**
+4. **Okumaya başla.** Gerisi kendiliğinden olur.
+
+## Kullanım
 
 ### Eşleştirme
-- **ISBN ile otomatik eşleştirme.** Kitapta ISBN varsa sormadan doğru baskıyla eşleşir.
-- **Calibre etiketi.** Calibre'de kitaba `1000kitap:24319` gibi bir tanımlayıcı eklersen eşleşme kesin olur.
-- **Aramada yayınevi.** Sonuçlar "Walden — Henry David Thoreau · Zeplin Kitap, 2019" gibi görünür.
-- **Baskıyı değiştir.** Doğru baskıyı seçince sayfa numaraları daha isabetli olur.
-- **Kütüphaneyi eşleştir.** Kobo'daki tüm kitapları tarar; ISBN'i ya da başlığı ve yazarı birebir
-  tutanları kendisi eşleştirir, emin olamadıklarını sonda sorar. Okuma durumlarını değiştirmez.
-  Durdurulabilir, kaldığı yerden devam eder.
-- **Atlananlar.** Gözden geçirirken "Atla" dediğin kitaplar ayrı bir listede durur. Oradan
-  "Şimdi eşleştir" ya da "Tekrar taramaya al" diyebilirsin; "Hepsini tekrar taramaya al" listeyi boşaltır.
-- **Dosyaya uzun basınca "1000Kitap".** Kitabı açmadan eşleştir, Okuyacağım/Okuyorum/Okudum/Yarım bıraktım,
-  Kitaplığa ekle/Kitaplıktan çıkar.
-- **Toplu "Okuyacağım".** Dosya tarayıcısında "Seç" ile kitap seç (ya da klasörden işaretle);
-  okuduğun ya da okumakta olduğun kitaplara dokunulmaz.
 
-### 1000Kitap kitaplığım
-- **Kobo'daki kitapları kitaplığa ekle.** Eşleşmiş kitaplarından 1000Kitap kitaplığında olmayanları
-  listeler; işaretlediklerin eklenir. Aynı kitabın başka bir baskısı zaten kitaplığındaysa listede çıkmaz.
-- **Kitaplığımdan çıkar.** 1000Kitap kitaplığının tamamını listeler (Kobo'da olanlar işaretli);
-  sadece seçtiklerin, onay verdikten sonra çıkarılır. Basılı kitapların da bu listede olabilir.
-- **Tek kitap:** okurken menüden ya da dosyaya uzun basınca "Kitaplığa ekle / Kitaplıktan çıkar".
-- **Eşleşen kitapları kitaplığıma ekle** (Ayarlar, varsayılan kapalı): bir kitap eşleşince kitaplığa da
-  eklenir. Eşleşmeyi değiştirirsen eklentinin eklediği eski baskı çıkarılır; senin önceden
-  kitaplığında olan bir kitaba dokunulmaz.
+| Nerede | Ne yapar |
+| --- | --- |
+| Kitabı açınca | ISBN ya da Calibre etiketi varsa sormadan eşleşir; yoksa arama açılır. |
+| Okurken: **Baskıyı değiştir** | Sayfa numaralarının doğru çıkması için okuduğun baskıyı seçersin. |
+| **Kütüphaneyi eşleştir** | Kobo'daki eşleşmemiş kitapları tarar. Cihazı yormamak için kitapları açmaz, 20 kitapta bir kısa mola verir. Dokununca durur; sonra kaldığı yerden devam eder. |
+| **Emin olunamayanları gözden geçir** | Tek tek seç, atla ya da toplu onayla. |
+| **Atlananlar** | Atladığın kitaplar burada durur; sonradan eşleştirebilir ya da tekrar taramaya alabilirsin. |
+| Dosyaya uzun bas → **1000Kitap** | Kitabı açmadan eşleştirir; durum ve kitaplık düğmeleri de burada. |
+
+**Toplu onaylanan kitaplar** "otomatik, onaylanmadı" diye işaretlenir. Böyle bir kitabı açtığında eklenti eşleşmenin yanlış olabileceğini hatırlatır; **Doğru**, **Baskıyı değiştir** ya da **Başka kitap ara** diyebilirsin. Sen doğrulayana kadar o kitap için durum, ilerleme ve renkli vurgular kendiliğinden gönderilmez.
 
 ### Okurken
-- **Vurgu menüsü → "1000Kitap'a gönder".** Metni, sayfayı, notu düzenle; konu ve yorum izni seç
-  ya da **özel not** olarak gönder (profilinde görünmez).
-- **Renkle otomatik gönderim.** Ayarlar'dan her renge bir iş ver: herkese açık alıntı, özel not
-  ya da gönderme. Bir rengi açmadan önce o renkle yaptığın vurgular gönderilmez.
-- **Bu kitabın vurgularını gönder.** "Hepsini gönder" ya da "Seçerek gönder"; aynı vurgu iki kez gitmez.
-- **Otomatik "Okuyorum".** Eşleşince/açılınca; daha önce okuduğun kitaplara dokunmaz.
-- **KOReader durumunu yansıtma.** Bitti → Okudum, Beklemede → Yarım bıraktım, Okunuyor → Okuyorum.
-- **Bitiş ekranı.** Kitap bitince "Okudum", 1–10 puan ve kısa inceleme tek ekranda.
-- **Okuma ilerlemesi** (varsayılan kapalı): kitabı kapatınca ya da her %10'da.
-- **Okuma seansları / günlük seri** (varsayılan kapalı): okuduğun süre ve sayfa.
-  1 dakikadan kısa seanslar gönderilmez; bir sayfada 5 dakikadan uzun kalınan süre sayılmaz.
 
-> İlerleme ve seanslar varsayılan olarak kapalı, çünkü 1000Kitap'ta "Okuduğun sayfa sayısını
-> güncellerken yeni bir gönderi paylaşılsın mı?" ayarı açıksa her güncelleme herkese açık bir
-> gönderi oluşturur. Açmadan önce o ayarı sitede kapatmanı öneririm.
+- **Alıntı:** Metni seç → **1000Kitap'a gönder.** Metni, sayfayı ve notu düzeltebilir; konu ve yorum izni seçebilir ya da özel not yapabilirsin.
+- **Bu kitabın vurgularını gönder:** Hepsini ya da seçtiklerini gönderir. Daha önce gönderilen vurgu tekrar gitmez.
+- **Okuma durumu:** Kitabı açınca "Okuyorum" olur; daha önce okuduğun kitaba dokunulmaz. KOReader'da kitabı Bitti, Beklemede ya da Okunuyor yaparsan 1000Kitap'a da yansır.
+- **Bitiş ekranı:** Kitap bitince "Okudum", 1–10 puan ve inceleme tek ekranda.
+- **Okuma ilerlemesi ve seanslar** (varsayılan kapalı): Sayfanı ve okuma süreni gönderir.
+  1000Kitap'ta "Okuduğun sayfa sayısını güncellerken yeni bir gönderi paylaşılsın mı?" ayarı açıksa her güncelleme herkese açık bir gönderi olur; açmadan önce o ayarı sitede kapat.
+
+### İleti yazma
+
+**Araçlar → 1000Kitap → İleti yaz.** Başlık isteğe bağlı. Okurken açarsan okuduğun kitap iletiye etiketlenir, istersen kaldırırsın. Konu ve yorum izni seçebilirsin.
+
+Yazdığın metin taslak olarak saklanır: pencereyi kapatsan da, 1000Kitap iletiyi reddetse de kaybolmaz; "İleti yaz"ı açınca kaldığın yerden devam edersin.
+
+### 1000Kitap kitaplığım
+
+- **Kobo'daki kitapları kitaplığa ekle:** Eşleşmiş kitaplarından kitaplığında olmayanları listeler; işaretlediklerin eklenir. Başka bir baskısı zaten kitaplığında olan kitap listede çıkmaz.
+- **Kitaplığımdan çıkar:** Kitaplığının tamamını listeler; Kobo'da olanlar işaretlidir. Basılı kitapların da bu listededir; sadece işaretlediklerin, onay verdikten sonra çıkarılır.
+- **Eşleşen kitapları kitaplığıma ekle** (Ayarlar, varsayılan kapalı): Eşleşen kitap kitaplığına da eklenir. Toplu onaylananlar ancak sen doğrulayınca eklenir.
 
 ### Keşif
-- **Kitap bilgisi:** 1000Kitap puanı, okunma/beğeni/alıntı sayıları, senin durumun, takip ettiklerinden okuyanlar.
-- **Popüler alıntılar:** okuduğun kitabın en beğenilen alıntıları.
-- **Ne okusam?:** Okuyacaklarım listenden rastgele 10 kitap; Kobo'nda olanlar ✓ ile işaretli ve dokununca açılır.
-- **Okuyacaklarım koleksiyonu:** listedeki ve Kobo'nda bulunan kitapları "1000Kitap – Okuyacaklarım"
-  koleksiyonuna ekler, artık listede olmayanları çıkarır.
-- **Okuma hedefi:** bu yılın hedefini göster ya da belirle.
-- **Uyku ekranında alıntılarım:** kendi alıntılarından rastgele biri uyku ekranında görünür;
-  kapatınca eski uyku ekranı mesajın geri gelir.
 
-### Kolaylıklar
-- **Çevrimdışı sıra:** Wi-Fi kapalıysa her şey sıraya girer, bağlanınca gönderilir.
-- **İhtiyaç anında Wi-Fi:** kitabı kapatınca sırada bir şey varsa Wi-Fi'yi açar, gönderir, kapatır.
-- **Hareketler:** KOReader'ın hareket yöneticisinde (dişli simgesi → Dokunma ve hareketler)
-  "1000Kitap: bekleyenleri gönder" ve "1000Kitap: ne okusam?" eylemleri var.
-- **Otomatik durum değişikliklerinde onay** (isteğe bağlı).
+- **Kitap bilgisi:** 1000Kitap puanı, okunma ve alıntı sayıları, senin durumun, takip ettiklerinden okuyanlar.
+- **Popüler alıntılar:** Okuduğun kitabın en çok beğenilen alıntıları.
+- **Ne okusam?:** Okuyacaklarım listenden rastgele 10 kitap; Kobo'nda olanlar dokununca açılır.
+- **Okuyacaklarım koleksiyonu:** Listedeki ve Kobo'nda bulunan kitapları "1000Kitap – Okuyacaklarım" koleksiyonunda toplar.
+- **Okuma hedefi:** Bu yılın hedefini gösterir ya da belirlersin.
+- **Uyku ekranında alıntılarım:** Kendi alıntılarından biri uyku ekranında görünür.
 
-## Menü
+### Kısayollar ve çevrimdışı kullanım
 
-**Araçlar → 1000Kitap** (kitap açıkken):
-Kitap · Baskıyı değiştir · Okuma durumunu ayarla · Puan ver · Bu kitabın vurgularını gönder ·
-Kitap bilgisi · Popüler alıntılar · Kütüphaneyi eşleştir · Emin olunamayanları gözden geçir ·
-Atlananlar · 1000Kitap kitaplığım · Ne okusam? · Okuyacaklarım koleksiyonunu güncelle · Okuma hedefi · Bekleyen gönderiler · Ayarlar
-
-Dosya tarayıcısında ayrıca **Kitapları "Okuyacağım" olarak ekle** vardır.
-**Bekleyen gönderiler**'e dokununca hemen gönderir; basılı tutunca sırayı temizler.
-
-## Bilinen sınırlar
-
-- KOReader'ın "Tüm notları dışa aktar" menüsüne 1000Kitap eklenemedi: KOReader dışarıdan hedef
-  eklemeye resmi bir yol sunmuyor. Aynı işi "Bu kitabın vurgularını gönder" yapıyor.
-- Okuma hedefinde "şimdiye kadar okunan" sayısı, 1000Kitap'ın yanıtında bulunursa gösterilir.
-- Kitap başlığı ve yazar dosyada hiç yoksa kütüphane eşleştirmesi dosya adına bakar.
+- Wi-Fi kapalıyken yaptığın her şey sıraya girer. **Bekleyen gönderiler**'e dokununca hemen gönderir, basılı tutunca sırayı temizler.
+- **İhtiyaç anında Wi-Fi** açıksa kitabı kapattığında Wi-Fi'yi açar, gönderir, kapatır.
+- KOReader'ın hareket ayarlarında üç eylem var: **1000Kitap: bekleyenleri gönder**, **1000Kitap: ileti yaz**, **1000Kitap: ne okusam?**
 
 ## Güncelleme
 
-0.2.3'ten itibaren eklenti kendini bu depodan güncelleyebilir:
-**Araçlar → 1000Kitap → Ayarlar → Güncellemeleri denetle.** Yeni sürüm varsa sorar, onay verirsen
-indirir ve KOReader'ı yeniden başlatmanı ister. "Haftada bir kendiliğinden denetle" açıksa (varsayılan)
-Wi-Fi bağlandığında haftada bir bakar; sormadan hiçbir şey kurmaz.
+**Araçlar → 1000Kitap → Ayarlar → Güncellemeleri denetle.** Yeni sürüm varsa sorar; onaylarsan indirir ve KOReader'ı yeniden başlatmanı ister. "Haftada bir kendiliğinden denetle" açıksa Wi-Fi bağlandığında haftada bir bakar, sormadan hiçbir şey kurmaz.
 
-- `ayar.lua`, eklenti ayarların ve bekleyen gönderilerin korunur.
-- Dosyalar önce denetlenir (boyut, Lua sözdizimi); bir sorun olursa eski sürüm olduğu gibi kalır.
-- Önceki sürüm eklenti klasöründeki `.yedek` klasöründe durur.
-- 0.2.2 ve öncesinden geçerken bir kez elle kurman gerekir.
+Güncellemede hesap bilgilerin, ayarların ve bekleyen gönderilerin korunur. Dosyalar kurulmadan önce denetlenir; bir sorun olursa mevcut sürüm olduğu gibi kalır. Önceki sürüm eklenti klasöründeki `.yedek` klasöründe durur.
 
-## Geliştirme
+0.2.2 ve önceki sürümlerden 0.2.3 ya da sonrasına bir kez elle geçmen gerekir.
 
-Testler KOReader'ı ve 1000Kitap'ı taklit eden sahte bir ortamda çalışır; gerçek hesaba istek gitmez.
+## Sorun giderme
 
-```
-texlua test/sozdizimi.lua binkitap.koplugin/*.lua
-texlua test/uctan_uca.lua
-```
+| Belirti | Çözüm |
+| --- | --- |
+| "Giriş yapınız" uyarısı | Oturumun kapanmış. Kodları yeniden al ve `ayar.lua`'yı güncelle. Bekleyen gönderilerin kaybolmaz. |
+| Ne okusam, koleksiyon ya da uyku ekranı çalışmıyor | `ayar.lua`'ya ya da **Hesap bilgileri**'ne kullanıcı adını ekle. |
+| Kitap yanlış baskıyla eşleşmiş | Okurken **Baskıyı değiştir**, ya da dosyaya uzun bas → **Eşleşmeyi değiştir.** |
+| Kütüphane eşleştirmesi yavaş | Bilerek böyle: cihazı kilitlememek için kitaplar arasında bekler. İstediğin an durdurup sonra devam edebilirsin. |
+| Gönderiler gitmiyor | Wi-Fi'yi aç ya da **Bekleyen gönderiler**'e dokun. |
 
-`ayar.lua` `.gitignore`'dadır; hesap kodlarını asla depoya ekleme.
+## Gizlilik
+
+- Hesap kodların yalnızca Kobo'ndaki `ayar.lua` dosyasında ve eklentinin ayarlarında durur, 1000Kitap dışında hiçbir yere gönderilmez. Bu kodlar hesabının anahtarıdır, kimseyle paylaşma.
+- Eklenti, güncelleme denetimi dışında yalnızca 1000Kitap'la konuşur. Güncelleme denetimi bu depodaki sürüm dosyasını okur.
+- 1000Kitap'ta senin eklediğin hiçbir şeyi kendiliğinden silmez. Kitaplığından bir kitap ancak sen seçip onaylarsan çıkarılır; tek istisna, eşleşmeyi değiştirdiğinde eklentinin kendi eklediği eski baskıdır.

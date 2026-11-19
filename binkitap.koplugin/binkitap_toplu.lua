@@ -17,7 +17,9 @@ local logger = require("logger")
 local _ = require("gettext")
 local T = require("ffi/util").template
 
-local ARAMA_ARALIGI = 1 -- saniye; toplu aramalarda 1000Kitap'ı yormamak için
+local ARAMA_ARALIGI = 1.5  -- saniye; kitaplar arası: hem 1000Kitap'ı yormamak hem dokunuşlara yer açmak için
+local PARCA = 20           -- bu kadar kitapta bir: ayarları yaz, belleği topla, cihazı dinlendir
+local DINLENME = 10        -- saniye
 
 return function(BinKitap)
     local Api, Y = BinKitap.Api, BinKitap.Y
@@ -199,12 +201,14 @@ return function(BinKitap)
     -- Toplu eşleştirme (ilerleme göstergesi, durdurma, kaldığı yerden devam)
     -------------------------------------------------------------------------
 
-    --- s = { baslik, bitince = function(eminler, belirsizler, durduruldu, hata) }
+    --- s = { baslik, bitince = function(eminler, belirsizler, durduruldu, hata), ara_kayit = function(belirsizler) }
+    -- Kobo'yu kilitlememek için: belge açılmaz (sadece yan dosya / kapak önbelleği / dosya adı),
+    -- ayarlar her kitapta değil PARCA kitapta bir yazılır, PARCA kitapta bir DINLENME saniye ara verilir.
     function BinKitap:topluEslestir(dosyalar, s)
         local i, eminler, belirsizler, iptal = 0, {}, {}, false
         local ilerleme, kapatiyorum
 
-        local function goster()
+        local function goster(ek)
             if ilerleme then
                 kapatiyorum = true
                 UIManager:close(ilerleme)
@@ -212,7 +216,7 @@ return function(BinKitap)
             end
             local kutu
             kutu = InfoMessage:new{
-                text = T(_("%1\n\n%2 / %3 kitap · %4 eşleşti\n\nDurdurmak için dokun."), s.baslik, i, #dosyalar, #eminler),
+                text = T(_("%1\n\n%2 / %3 kitap · %4 eşleşti%5\n\nDurdurmak için dokun."), s.baslik, i, #dosyalar, #eminler, ek or ""),
                 dismiss_callback = function()
                     if kapatiyorum then return end
                     if ilerleme == kutu then ilerleme = nil end
@@ -224,6 +228,12 @@ return function(BinKitap)
             UIManager:forceRePaint()
         end
 
+        local function araKayit()
+            self.settings:flush()
+            if s.ara_kayit then s.ara_kayit(belirsizler) end
+            collectgarbage("collect")
+        end
+
         local function bitir(durduruldu, hata)
             if ilerleme then
                 kapatiyorum = true
@@ -231,23 +241,36 @@ return function(BinKitap)
                 ilerleme = nil
                 kapatiyorum = false
             end
+            araKayit()
             s.bitince(eminler, belirsizler, durduruldu, hata)
         end
 
-        local function adim()
+        local adim
+        local function sonraki()
+            if iptal then return bitir(true) end
+            if i > 0 and i % PARCA == 0 and i < #dosyalar then
+                araKayit()
+                goster(T(_("\n\nCihaz %1 saniye dinleniyor…"), DINLENME))
+                UIManager:scheduleIn(DINLENME, adim)
+            else
+                UIManager:scheduleIn(ARAMA_ARALIGI, adim)
+            end
+        end
+
+        adim = function()
             if iptal then return bitir(true) end
             i = i + 1
             local yol = dosyalar[i]
             if not yol then return bitir(false) end
-            if i == 1 or i % 5 == 0 then goster() end
-            local bilgi = Y.dosyaBilgisi(self.ui, yol)
+            if i == 1 or i % 5 == 0 or (i - 1) % PARCA == 0 then goster() end
+            local bilgi = Y.dosyaBilgisi(self.ui, yol, nil, true)
             local ok, kitap, adaylar, sorgu, err, tur = pcall(function() return self:otomatikEslestir(bilgi) end)
             if not ok then
                 logger.warn("1000Kitap: eşleştirme hatası", yol, kitap)
                 kitap, adaylar, sorgu = nil, {}, bilgi.baslik
             end
             if kitap then
-                self:eslesmeKaydet(yol, kitap) -- hemen kaydet: yarıda kalırsa kaldığı yerden devam eder
+                self:eslesmeKaydet(yol, kitap, true)
                 eminler[#eminler + 1] = { yol = yol, kitap = kitap }
             elseif tur == "ag" or tur == "yetki" then
                 i = i - 1
@@ -260,19 +283,39 @@ return function(BinKitap)
                 end
                 belirsizler[yol] = { sorgu = sorgu, adaylar = kisa, baslik = bilgi.baslik }
             end
-            UIManager:scheduleIn(ARAMA_ARALIGI, adim)
+            sonraki()
         end
         adim()
     end
 
     --- Emin olunamayan dosyaları tek tek seçtirir.
-    -- belirsizler: yol → {sorgu, adaylar, baslik}; secildi(yol, kitap); devam = {metin, callback} (isteğe bağlı)
-    function BinKitap:belirsizListesi(belirsizler, secildi, devam, atlandi)
+    -- belirsizler: yol → {sorgu, adaylar, baslik}; secildi(yol, kitap, ertele); devam = {metin, callback} (isteğe bağlı)
+    -- toplu_bitti verilirse "otomatik onayla" seçenekleri de çıkar; toplu onaydan sonra bir kez çağrılır.
+    function BinKitap:belirsizListesi(belirsizler, secildi, devam, atlandi, toplu_bitti)
         local menu
+        local function sayilar()
+            local tek, adayli = 0, 0
+            for _y, b in pairs(belirsizler) do
+                local n = #(b.adaylar or {})
+                if n == 1 then tek = tek + 1 end
+                if n >= 1 then adayli = adayli + 1 end
+            end
+            return tek, adayli
+        end
         local function itemler()
             local t = {}
             if devam then
                 t[#t + 1] = { text = devam.metin(), bold = true, eylem = "devam", separator = true }
+            end
+            if toplu_bitti then
+                local tek, adayli = sayilar()
+                if tek > 0 then
+                    t[#t + 1] = { text = T(_("Tek adaylıları otomatik onayla (%1)"), tek), eylem = "tek",
+                        separator = adayli == tek }
+                end
+                if adayli > tek then
+                    t[#t + 1] = { text = T(_("Hepsini ilk adayla onayla (%1)"), adayli), eylem = "ilk", separator = true }
+                end
             end
             local yollar = {}
             for yol in pairs(belirsizler) do yollar[#yollar + 1] = yol end
@@ -307,6 +350,38 @@ return function(BinKitap)
                 if item.eylem == "devam" then
                     UIManager:close(m)
                     devam.callback()
+                    return true
+                end
+                if item.eylem == "tek" or item.eylem == "ilk" then
+                    local secilecek = {}
+                    for y, b in pairs(belirsizler) do
+                        local n = #(b.adaylar or {})
+                        if (item.eylem == "tek" and n == 1) or (item.eylem == "ilk" and n >= 1) then
+                            secilecek[#secilecek + 1] = y
+                        end
+                    end
+                    table.sort(secilecek)
+                    local aciklama = item.eylem == "tek"
+                        and _("Tek aday bulunan %1 kitap o adayla eşleştirilecek.")
+                        or _("Aday bulunan %1 kitabın her biri listedeki ilk adayla eşleştirilecek.")
+                    UIManager:show(ConfirmBox:new{
+                        text = T(aciklama, #secilecek) .. "\n\n"
+                            .. _("Bunlar \"otomatik onaylandı\" diye işaretlenir. Birini açtığında eşleşmenin yanlış olabileceğini söyleyip doğrulamanı isteyeceğim; doğrulayana kadar o kitap için durum ve ilerleme kendiliğinden gönderilmez."),
+                        ok_text = _("Onayla"),
+                        ok_callback = function()
+                            for _i, y in ipairs(secilecek) do
+                                local b = belirsizler[y]
+                                belirsizler[y] = nil
+                                local k = {}
+                                for a, v in pairs(b.adaylar[1]) do k[a] = v end
+                                k.otomatik = true
+                                secildi(y, k, true)
+                            end
+                            toplu_bitti()
+                            yenile()
+                            self:bildir(T(_("%1 kitap otomatik eşleştirildi."), #secilecek), 3)
+                        end,
+                    })
                     return true
                 end
                 if not item.yol then return true end
@@ -367,15 +442,15 @@ return function(BinKitap)
             self.settings:saveSetting("kutuphane_belirsiz", belirsizler)
             self.settings:flush()
         end
-        self:belirsizListesi(belirsizler, function(yol, kitap)
-            self:eslesmeKaydet(yol, kitap)
-            kaydet()
+        self:belirsizListesi(belirsizler, function(yol, kitap, ertele)
+            self:eslesmeKaydet(yol, kitap, ertele)
+            if not ertele then kaydet() end
         end, nil, function(yol)
             local atlanan = self.settings:readSetting("kutuphane_atlanan") or {}
             atlanan[yol] = true
             self.settings:saveSetting("kutuphane_atlanan", atlanan)
             kaydet()
-        end)
+        end, kaydet)
     end
 
     function BinKitap:kutuphaneEslestir()
@@ -403,19 +478,23 @@ return function(BinKitap)
             end
             return self:bildir(T(_("Kütüphanendeki %1 kitabın hepsi eşleşmiş."), #hepsi))
         end
-        local dakika = math.max(1, math.ceil(#yapilacak * 2 / 60))
+        local dakika = math.max(1, math.ceil(#yapilacak * (ARAMA_ARALIGI + 2 + DINLENME / PARCA) / 60))
         UIManager:show(ConfirmBox:new{
             text = T(_("Kütüphanende %1 kitap var; %2 tanesi henüz eşleşmemiş.\n\nISBN'i ya da başlığı ve yazarı birebir tutanları kendim eşleştireceğim, emin olamadıklarını sonda soracağım. Okuma durumların değişmez.\n\nTahmini süre: yaklaşık %3 dakika. İstediğin an durdurabilirsin."), #hepsi, #yapilacak, dakika),
             ok_text = _("Başlat"),
             ok_callback = function()
                 NetworkMgr:runWhenOnline(function()
+                    local function belirsizKaydet(belirsizler)
+                        local tum = self:kutuphaneBelirsizleri()
+                        for yol, b in pairs(belirsizler) do tum[yol] = b end
+                        self.settings:saveSetting("kutuphane_belirsiz", tum)
+                        self.settings:flush()
+                    end
                     self:topluEslestir(yapilacak, {
                         baslik = _("Kütüphane eşleştiriliyor"),
+                        ara_kayit = belirsizKaydet,
                         bitince = function(eminler, belirsizler, durduruldu, hata)
-                            local tum = self:kutuphaneBelirsizleri()
-                            for yol, b in pairs(belirsizler) do tum[yol] = b end
-                            self.settings:saveSetting("kutuphane_belirsiz", tum)
-                            self.settings:flush()
+                            belirsizKaydet(belirsizler)
                             local n_belirsiz = 0
                             for _k in pairs(belirsizler) do n_belirsiz = n_belirsiz + 1 end
                             local satirlar = { T(_("%1 kitap eşleşti."), #eminler) }
@@ -851,7 +930,8 @@ return function(BinKitap)
             end
         end
         dialog = ButtonDialog:new{
-            title = (esl and T(_("1000Kitap: %1"), BinKitap.kitapEtiketi(esl)) or _("1000Kitap'ta eşleşmedi"))
+            title = (esl and (T(_("1000Kitap: %1"), BinKitap.kitapEtiketi(esl))
+                    .. (esl.otomatik and _("\n(otomatik eşleşti, henüz onaylanmadı)") or "")) or _("1000Kitap'ta eşleşmedi"))
                 .. "\n" .. dosyaAdi(yol),
             title_align = "left",
             buttons = {
