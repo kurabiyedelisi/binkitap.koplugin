@@ -1,10 +1,11 @@
 --[[
-1000Kitap eklentisi (resmi değildir) — v0.2
+1000Kitap eklentisi (resmi değildir)
 
 Ana dosya: kurulum, eşleştirme, alıntı gönderme, okuma durumu, ilerleme,
 okuma seansları, renkle otomatik gönderim, gönderim sırası, menü.
 Dosya tarayıcısı ve toplu işler: binkitap_toplu.lua
 Keşif (ne okusam, koleksiyon, bilgi kartı, hedef, uyku ekranı): binkitap_kesif.lua
+GitHub'dan güncelleme: binkitap_guncelle.lua
 ]]
 
 local ButtonDialog = require("ui/widget/buttondialog")
@@ -34,7 +35,11 @@ local Api = yukle("binkitap_api")
 local Y = yukle("binkitap_yardimci")
 local kirp, kisalt = Y.kirp, Y.kisalt
 
-local SURUM = "0.2.2"
+-- Sürüm tek yerde, _meta.lua'da tutulur (güncelleme denetimi de onu okur).
+local SURUM = (function()
+    local ok, meta = pcall(dofile, eklenti_dizini .. "/_meta.lua")
+    return ok and type(meta) == "table" and meta.version or "?"
+end)()
 local GONDERIM_ARALIGI = 1.5   -- saniye; art arda çok hızlı göndermemek için
 local SAYFA_UST_SINIR = 300    -- bir sayfada en fazla bu kadar saniye sayılır (boşta kalma)
 local SEANS_ALT_SINIR = 60     -- bundan kısa okuma seansı gönderilmez
@@ -67,6 +72,7 @@ BinKitap.Api = Api
 BinKitap.Y = Y
 BinKitap.ORTAK = ORTAK
 BinKitap.SURUM = SURUM
+BinKitap.DIZIN = eklenti_dizini
 
 function BinKitap:init()
     if not ORTAK.settings then
@@ -1367,6 +1373,7 @@ function BinKitap:onNetworkConnected()
     if #self:kuyruk() > 0 and Api:kimlikVar() then
         UIManager:scheduleIn(3, function() self:kuyruguGonder(true) end)
     end
+    if self.guncellemeKendiliginden then self:guncellemeKendiliginden() end
 end
 
 function BinKitap:onBinKitapSimdiGonder()
@@ -1542,7 +1549,11 @@ function BinKitap:ayarlarMenusu()
     if self.uykuMenuOgesi then
         ogeler[#ogeler + 1] = self:uykuMenuOgesi()
     end
-    ogeler[#ogeler + 1] = { text = T(_("Sürüm %1"), SURUM), enabled = false }
+    if self.guncellemeMenuOgeleri then
+        for _i, o in ipairs(self:guncellemeMenuOgeleri()) do ogeler[#ogeler + 1] = o end
+    else
+        ogeler[#ogeler + 1] = { text = T(_("Sürüm %1"), SURUM), enabled = false }
+    end
     return ogeler
 end
 
@@ -1661,5 +1672,6 @@ end
 -- Dosya tarayıcısı ve toplu işler, keşif özellikleri
 yukle("binkitap_toplu")(BinKitap)
 yukle("binkitap_kesif")(BinKitap)
+yukle("binkitap_guncelle")(BinKitap)
 
 return BinKitap

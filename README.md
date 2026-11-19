@@ -1,4 +1,4 @@
-# 1000Kitap eklentisi (KOReader) — v0.2.2
+# 1000Kitap eklentisi (KOReader) — v0.2.3
 
 Okuduğun kitapları, alıntılarını ve okuma ilerlemeni KOReader'dan 1000Kitap hesabına gönderir.
 Resmi bir eklenti değildir. 1000Kitap'ın web sitesinin kullandığı iç API ile çalışır; site
@@ -121,6 +121,18 @@ Dosya tarayıcısında ayrıca **Kitapları "Okuyacağım" olarak ekle** vardır
   eklemeye resmi bir yol sunmuyor. Aynı işi "Bu kitabın vurgularını gönder" yapıyor.
 - Okuma hedefinde "şimdiye kadar okunan" sayısı, 1000Kitap'ın yanıtında bulunursa gösterilir.
 - Kitap başlığı ve yazar dosyada hiç yoksa kütüphane eşleştirmesi dosya adına bakar.
+
+## Güncelleme
+
+0.2.3'ten itibaren eklenti kendini bu depodan güncelleyebilir:
+**Araçlar → 1000Kitap → Ayarlar → Güncellemeleri denetle.** Yeni sürüm varsa sorar, onay verirsen
+indirir ve KOReader'ı yeniden başlatmanı ister. "Haftada bir kendiliğinden denetle" açıksa (varsayılan)
+Wi-Fi bağlandığında haftada bir bakar; sormadan hiçbir şey kurmaz.
+
+- `ayar.lua`, eklenti ayarların ve bekleyen gönderilerin korunur.
+- Dosyalar önce denetlenir (boyut, Lua sözdizimi); bir sorun olursa eski sürüm olduğu gibi kalır.
+- Önceki sürüm eklenti klasöründeki `.yedek` klasöründe durur.
+- 0.2.2 ve öncesinden geçerken bir kez elle kurman gerekir.
 
 ## Geliştirme
 
