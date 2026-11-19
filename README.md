@@ -9,7 +9,6 @@ dosyasının başında listelenmiştir.
 
 Bu sayfadaki yeşil **Code → Download ZIP** düğmesiyle depoyu indir ve aç. İçindeki
 `binkitap.koplugin` klasörü eklentinin kendisidir; Kobo'ya sadece onu kopyala.
-Önceki sürümler [Tags](../../tags) sayfasında.
 
 ## Kurulum
 
