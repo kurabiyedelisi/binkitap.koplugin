@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 0.2.4 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 0.2.5 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -86,6 +86,7 @@ Yazdığın metin taslak olarak saklanır: pencereyi kapatsan da, 1000Kitap ilet
 ### 1000Kitap kitaplığım
 
 - **Kobo'daki kitapları kitaplığa ekle:** Eşleşmiş kitaplarından kitaplığında olmayanları listeler; işaretlediklerin eklenir. Başka bir baskısı zaten kitaplığında olan kitap listede çıkmaz.
+- Yüzlerce kitap seçebilirsin: kitaplığın sayfa sayfa getirilir, gönderim sırasında ilerleme görünür. Dokununca durur; kalanlar **Bekleyen gönderiler**'de bekler, oradan devam edersin.
 - **Kitaplığımdan çıkar:** Kitaplığının tamamını listeler; Kobo'da olanlar işaretlidir. Basılı kitapların da bu listededir; sadece işaretlediklerin, onay verdikten sonra çıkarılır.
 - **Eşleşen kitapları kitaplığıma ekle** (Ayarlar, varsayılan kapalı): Eşleşen kitap kitaplığına da eklenir. Toplu onaylananlar ancak sen doğrulayınca eklenir.
 
@@ -119,6 +120,7 @@ Güncellemede hesap bilgilerin, ayarların ve bekleyen gönderilerin korunur. Do
 | "Giriş yapınız" uyarısı | Oturumun kapanmış. Kodları yeniden al ve `ayar.lua`'yı güncelle. Bekleyen gönderilerin kaybolmaz. |
 | Ne okusam, koleksiyon ya da uyku ekranı çalışmıyor | `ayar.lua`'ya ya da **Hesap bilgileri**'ne kullanıcı adını ekle. |
 | Kitap yanlış baskıyla eşleşmiş | Okurken **Baskıyı değiştir**, ya da dosyaya uzun bas → **Eşleşmeyi değiştir.** |
+| Çok kitabı kitaplığa eklerken uzun sürüyor | Kitaplar tek tek, cihazı yormadan gönderilir. Ekrandaki sayaçtan izleyebilir, dokunup durdurabilirsin. |
 | Kütüphane eşleştirmesi yavaş | Bilerek böyle: cihazı kilitlememek için kitaplar arasında bekler. İstediğin an durdurup sonra devam edebilirsin. |
 | Gönderiler gitmiyor | Wi-Fi'yi aç ya da **Bekleyen gönderiler**'e dokun. |
 

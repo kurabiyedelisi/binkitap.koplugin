@@ -1134,23 +1134,35 @@ function BinKitap:kuyruk()
     return k
 end
 
-function BinKitap:siraya(oge)
-    local k = self:kuyruk()
-    -- aynı kitap için bekleyen eski durum/ilerleme öğesini yenisiyle değiştir
-    if oge.tur == "durum" or oge.tur == "ilerleme" or oge.tur == "puan" then
-        for i = #k, 1, -1 do
-            if k[i].tur == oge.tur and k[i].kitap_id == oge.kitap_id then table.remove(k, i) end
-        end
-    elseif oge.tur == "kitaplik_ekle" or oge.tur == "kitaplik_cikar" then
-        for i = #k, 1, -1 do
-            if (k[i].tur == "kitaplik_ekle" or k[i].tur == "kitaplik_cikar") and k[i].kitap_id == oge.kitap_id then
-                table.remove(k, i)
-            end
-        end
+local function ayniIs(a, b)
+    if a.kitap_id ~= b.kitap_id then return false end
+    if b.tur == "durum" or b.tur == "ilerleme" or b.tur == "puan" then return a.tur == b.tur end
+    if b.tur == "kitaplik_ekle" or b.tur == "kitaplik_cikar" then
+        return a.tur == "kitaplik_ekle" or a.tur == "kitaplik_cikar"
     end
-    k[#k + 1] = oge
-    self.settings:saveSetting("kuyruk", k)
+    return false
+end
+
+--- Birden çok öğeyi sıraya tek seferde ekler: aynı kitabın bekleyen eski durum/ilerleme/puan/
+-- kitaplık işini yenisiyle değiştirir; ayar dosyası bir kez yazılır (yüzlerce kitapta cihaz kilitlenmesin).
+function BinKitap:topluSiraya(ogeler)
+    local k = self:kuyruk()
+    local yeni = {}
+    for _i, o in ipairs(ogeler) do
+        if o.kitap_id then yeni[tostring(o.kitap_id)] = o end
+    end
+    local kalan = {}
+    for _i, eski in ipairs(k) do
+        local o = eski.kitap_id and yeni[tostring(eski.kitap_id)]
+        if not (o and ayniIs(eski, o)) then kalan[#kalan + 1] = eski end
+    end
+    for _i, o in ipairs(ogeler) do kalan[#kalan + 1] = o end
+    self.settings:saveSetting("kuyruk", kalan)
     self.settings:flush()
+end
+
+function BinKitap:siraya(oge)
+    self:topluSiraya({ oge })
 end
 
 local function sayfaHesapla(oge, m)
@@ -1255,8 +1267,29 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
     end
     ORTAK.gonderiliyor = true
     local sayac, durum_mesajlari, hatalar = {}, {}, {}
+    local toplam, yapilan, iptal = #self:kuyruk(), 0, false
+    local kutu, kapatiyorum
+    local ilerleme_goster = not sessiz and toplam >= 10
+    local function goster()
+        if kutu then kapatiyorum = true; UIManager:close(kutu); kapatiyorum = false end
+        local k
+        k = InfoMessage:new{
+            text = T(_("1000Kitap'a gönderiliyor…\n\n%1 / %2\n\nDurdurmak için dokun; kalanlar sırada bekler."), yapilan, toplam),
+            dismiss_callback = function()
+                if kapatiyorum then return end
+                if kutu == k then kutu = nil end
+                iptal = true
+            end,
+        }
+        kutu = k
+        UIManager:show(k)
+        UIManager:forceRePaint()
+    end
+    local yazilmadi = 0
 
     local function bitir(durdu_mesaji, durdu_tur)
+        if kutu then kapatiyorum = true; UIManager:close(kutu); kutu = nil; kapatiyorum = false end
+        if yazilmadi > 0 then self.settings:flush() end
         ORTAK.gonderiliyor = false
         local satirlar = {}
         for tur, n in pairs(sayac) do
@@ -1289,6 +1322,9 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
     end
 
     local function sonraki()
+        if iptal then
+            return bitir(_("Durduruldu."), "durdu")
+        end
         local k = self:kuyruk()
         local oge = k[1]
         if not oge then return bitir() end
@@ -1302,7 +1338,16 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
         end
         table.remove(k, 1)
         self.settings:saveSetting("kuyruk", k)
-        self.settings:flush()
+        -- Tekrar gönderilmesi zarar vermeyen işlerde ayar dosyasını her seferinde yazma
+        local tekrarlanabilir = oge.tur == "kitaplik_ekle" or oge.tur == "kitaplik_cikar"
+            or oge.tur == "durum" or oge.tur == "ilerleme" or oge.tur == "puan"
+        yazilmadi = yazilmadi + 1
+        if not tekrarlanabilir or yazilmadi >= 10 then
+            self.settings:flush()
+            yazilmadi = 0
+        end
+        yapilan = yapilan + 1
+        if ilerleme_goster and (yapilan == 1 or yapilan % 5 == 0) then goster() end
         if sonuc then
             if oge.tur == "durum" then
                 if not sonuc.atlandi then
@@ -1325,11 +1370,14 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
             end
         end
         if #k > 0 then
-            UIManager:scheduleIn(GONDERIM_ARALIGI, sonraki)
+            -- uzun sıralarda 25 işte bir kısa mola: işlemci ve pil rahatlasın
+            local bekle = (yapilan % 25 == 0) and 8 or GONDERIM_ARALIGI
+            UIManager:scheduleIn(bekle, sonraki)
         else
             bitir()
         end
     end
+    if ilerleme_goster then goster() end
     sonraki()
 end
 
