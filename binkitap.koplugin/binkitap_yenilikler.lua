@@ -3,6 +3,13 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.0.1",
+        maddeler = {
+            "Düzeltme: 1000Kitap ekranı açılırken KOReader'ın çökmesi giderildi.",
+            "Ekran çizilirken bir sorun çıkarsa artık KOReader çökmüyor: ekran kapanıyor, sebebi hata günlüğüne yazılıyor.",
+        },
+    },
+    {
         surum = "1.0.0",
         maddeler = {
             "1.0: eklentinin ilk tam sürümü. 0.4.2'deki her şey burada; bu sürümde yeni özellik yok, yalnızca sürüm numarası 1.0 oldu.",

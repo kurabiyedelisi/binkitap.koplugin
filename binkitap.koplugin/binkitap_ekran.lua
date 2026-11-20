@@ -410,6 +410,21 @@ return function(BinKitap)
             return true
         end
 
+        -- Çizimde bir hata olursa KOReader çökmesin: ekranı kapat, günlüğe yaz, söyle.
+        function Ekran:paintTo(bb, x, y)
+            local ok, hata = pcall(InputContainer.paintTo, self, bb, x, y)
+            if ok then return end
+            logger.err("1000Kitap: ekran çizilemedi", hata)
+            if self._cizim_hatasi then return end
+            self._cizim_hatasi = true
+            BinKitap.hataKaydet("eklenti", "Ekran", tostring(hata))
+            UIManager:scheduleIn(0, function()
+                UIManager:close(self)
+                if eklenti._ekran == self then eklenti._ekran = nil end
+                eklenti:hataGoster(_("1000Kitap ekranı gösterilemedi. Ayrıntısı hata günlüğünde; menüdeki her şey çalışmaya devam ediyor."))
+            end)
+        end
+
         function Ekran:onSwipe(_arg, ges)
             if ges and ges.direction == "south" then return self:onClose() end
             return false
@@ -717,11 +732,17 @@ return function(BinKitap)
             show_parent = ekran,
         }
 
-        local secilen = BinKitap.ekranaSigdir(bolumler, baslik:getSize().h + alt:getSize().h, yuk)
+        local sabit = baslik:getSize().h + alt:getSize().h
+        local secilen = BinKitap.ekranaSigdir(bolumler, sabit, yuk)
+        -- Dikkat: KOReader'da VerticalGroup ölçüsünü ilk getSize'da önbelleğe alır; ölçtükten
+        -- sonra çocuk eklenirse çizerken çöker. Bu yüzden yükseklikleri tek tek toplayıp
+        -- gövdeyi tek seferde kuruyoruz ve hiçbir grubu ölçtükten sonra değiştirmiyoruz.
+        local dolu = sabit
+        for _i, w in ipairs(secilen) do dolu = dolu + w:getSize().h end
         local govde = W.VerticalGroup:new{ align = "left" }
         for _i, w in ipairs(secilen) do govde[#govde + 1] = w end
         -- Alt satırı ekranın dibine it
-        local kalan = yuk - baslik:getSize().h - govde:getSize().h - alt:getSize().h
+        local kalan = yuk - dolu
         if kalan > 0 then govde[#govde + 1] = bosluk(math.floor(kalan)) end
         govde[#govde + 1] = alt
         ekran.bolumler = bolumler
