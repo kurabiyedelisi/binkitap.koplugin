@@ -3,6 +3,12 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.0.0",
+        maddeler = {
+            "1.0: eklentinin ilk tam sürümü. 0.4.2'deki her şey burada; bu sürümde yeni özellik yok, yalnızca sürüm numarası 1.0 oldu.",
+        },
+    },
+    {
         surum = "0.4.2",
         maddeler = {
             "Kitap listelerine Romanlar ve Konulara göre eklendi: Edebiyat, Tarih, İslam, Siyaset, Aşk, Eğitim, Fantastik, Felsefe, Toplum, Kültür, Kişisel Gelişim, Bilim–Teknoloji, Sanat, Psikoloji, Macera–Aksiyon, Ekonomi, Sosyoloji, Bilimkurgu, Polisiye, Tasavvuf.",
