@@ -222,33 +222,68 @@ return function(BinKitap)
     -- Ekran
     -------------------------------------------------------------------------
 
-    --- Bir alt menüyü (text + callback öğeleri) düğme listesi olarak gösterir.
-    function BinKitap:menudenDiyalog(baslik, ogeler)
+    --- Eklentinin menü öğelerini (text/text_func, callback, sub_item_table(_func), checked_func,
+    -- enabled_func) düğme listesi olarak gösterir. Alt menüye girilince "‹ Geri" bir üst listeye döner.
+    -- Açık/kapalı ayarlarda liste yeniden açılır ki yeni durum görünsün.
+    function BinKitap:menudenDiyalog(baslik, ogeler, geri)
         local ButtonDialog = require("ui/widget/buttondialog")
         local dialog
         local buttons = {}
+        local function yeniden() self:menudenDiyalog(baslik, ogeler, geri) end
         for _i, o in ipairs(ogeler or {}) do
-            local metin = o.text or (o.text_func and o.text_func())
-            local alt = o.sub_item_table or (o.sub_item_table_func and o.sub_item_table_func)
+            local ok_m, metin = pcall(function() return o.text or (o.text_func and o.text_func()) end)
+            if not ok_m then metin = nil end
+            local alt = o.sub_item_table or o.sub_item_table_func
             if metin and (o.callback or alt) then
+                local acik = true
+                if o.enabled == false then acik = false end
+                if o.enabled_func then
+                    local ok_e, e = pcall(o.enabled_func)
+                    acik = not ok_e or e and true or false
+                end
+                local isaret = ""
+                if o.checked_func then
+                    local ok_c, c = pcall(o.checked_func)
+                    isaret = (ok_c and c) and "☑ " or "☐ "
+                end
                 buttons[#buttons + 1] = {{
-                    text = alt and (metin .. " ›") or metin,
+                    text = isaret .. metin .. (alt and " ›" or ""),
                     align = "left",
+                    enabled = acik,
                     callback = function()
                         UIManager:close(dialog)
                         if alt then
                             local liste = type(alt) == "function" and alt() or alt
-                            self:menudenDiyalog(metin, liste)
-                        else
-                            o.callback()
+                            self:menudenDiyalog(metin, liste, yeniden)
+                            return
                         end
+                        o.callback()
+                        if o.checked_func then
+                            UIManager:scheduleIn(0.3, yeniden)
+                        end
+                        -- Ekran açıksa (altta) verisini tazele
+                        UIManager:scheduleIn(1, function() if self._ekran then self._ekran:yenile() end end)
                     end,
                 }}
             end
         end
-        buttons[#buttons + 1] = {{ text = _("Kapat"), callback = function() UIManager:close(dialog) end }}
+        local son_satir = {}
+        if geri then
+            son_satir[#son_satir + 1] = { text = "‹ " .. _("Geri"), callback = function() UIManager:close(dialog); geri() end }
+        end
+        son_satir[#son_satir + 1] = { text = _("Kapat"), callback = function() UIManager:close(dialog) end }
+        buttons[#buttons + 1] = son_satir
         dialog = ButtonDialog:new{ title = baslik, title_align = "left", buttons = buttons }
         UIManager:show(dialog)
+    end
+
+    --- Eklentinin tüm menüsü (ekranın kendisi hariç)
+    function BinKitap:tumOzellikler()
+        local ogeler = {}
+        for _i, o in ipairs(self:menuOgeleri()) do
+            if o.text ~= _("1000Kitap ekranı") then ogeler[#ogeler + 1] = o end
+        end
+        self:menudenDiyalog(_("1000Kitap · tüm özellikler"), ogeler)
     end
 
     --- Okuyacaklarının tamamı: Kobo'da olanlar üstte, dokununca açılır.
@@ -454,8 +489,11 @@ return function(BinKitap)
             end
         end
         if toplam() > sinir then
-            for _i, b in ipairs(bolumler) do
-                if b.kisa and b.w then b.w = b.kisa(); b.kisaldi = true; if toplam() <= sinir then break end end
+            local sirali = {}
+            for _i, b in ipairs(bolumler) do if b.kisa then sirali[#sirali + 1] = b end end
+            table.sort(sirali, function(x, y) return (x.kisa_sira or 99) < (y.kisa_sira or 99) end)
+            for _i, b in ipairs(sirali) do
+                if b.w then b.w = b.kisa(); b.kisaldi = true; if toplam() <= sinir then break end end
             end
         end
         local sonuc = {}
@@ -590,6 +628,19 @@ return function(BinKitap)
                     { text = _("İleti yaz"), callback = kapat_ve(function() self:iletiYaz() end) },
                     { text = _("Puan ver"), callback = kapat_ve(function() self:puanIstegi() end) },
                     { text = _("Bitirdim"), callback = kapat_ve(function() self:bitirdim() end) },
+                }, {
+                    { text = _("Kitap bilgisi"), callback = function() self:kitapKarti() end },
+                    { text = _("Alıntılar"), callback = function() self:populerAlintilar() end },
+                    { text = _("İncelemeler"), callback = function() self:populerIncelemeler() end },
+                    { text = _("Durum"), callback = function()
+                        self:menudenDiyalog(_("Okuma durumu"), {
+                            { text = _("Okuyorum"), callback = function() self:durumIstegi(Api.DURUM.okuyorum) end },
+                            { text = _("Okudum"), callback = function() self:durumIstegi(Api.DURUM.okudum) end },
+                            { text = _("Yarım bıraktım"), callback = function() self:durumIstegi(Api.DURUM.yarim) end },
+                            { text = _("Okuyacağım"), callback = function() self:durumIstegi(Api.DURUM.okuyacagim) end },
+                            { text = _("Baskıyı değiştir"), callback = function() self:baskiSec() end },
+                        })
+                    end },
                 }})
             else
                 kisayol = dugmeler({{
@@ -600,19 +651,27 @@ return function(BinKitap)
                 w = bolum(v.okuyucu and _("ŞU AN OKUDUĞUN") or _("SON OKUDUĞUN"), satir, bosluk(ara), kisayol) }
         end
 
-        -- 2) Hedef
+        -- 2) Hedef (dokununca hedef menüsü)
         local sene = tonumber(os.date("%Y"))
+        local function hedefe_dokun(w)
+            return W.Tiklanir:new{ w, callback = function()
+                self:menudenDiyalog(T(_("%1 okuma hedefi"), sene), self:hedefMenusu())
+            end }
+        end
         if v.hedef then
             local h = v.hedef
             local satir_metni = T(_("%1 / %2 kitap"), h.okunan, h.hedef) .. " · "
                 .. (h.kalan == 0 and _("hedef tamam") or T(_("%1 kitap kaldı"), h.kalan))
             bolumler[#bolumler + 1] = { ad = "hedef", w = bolum(T(_("%1 OKUMA HEDEFİ"), sene),
-                yazi(satir_metni, f_normal, { bold = true }),
-                bosluk(Size.span.vertical_default),
-                ilerleme(h.hedef > 0 and h.okunan / h.hedef or 0)) }
+                hedefe_dokun(W.VerticalGroup:new{
+                    align = "left",
+                    yazi(satir_metni .. "  ›", f_normal, { bold = true }),
+                    bosluk(Size.span.vertical_default),
+                    ilerleme(h.hedef > 0 and h.okunan / h.hedef or 0),
+                })) }
         else
             bolumler[#bolumler + 1] = { ad = "hedef", w = bolum(T(_("%1 OKUMA HEDEFİ"), sene),
-                yazi(_("Hedef bilgisi henüz yok; Yenile'ye dokun."), f_kucuk, { gri = true })) }
+                hedefe_dokun(yazi(_("Hedef bilgisi henüz yok. Dokun: hedefini gör ya da belirle  ›"), f_kucuk, { gri = true }))) }
         end
 
         -- 3) Okuyacaklarım rafı
@@ -656,7 +715,7 @@ return function(BinKitap)
                     end,
                 }
             end
-            bolumler[#bolumler + 1] = { ad = "raf",
+            bolumler[#bolumler + 1] = { ad = "raf", kisa_sira = 2,
                 w = bolum(etiket, raf, bosluk(ara), raf_dugmeleri()),
                 -- Sığmazsa kapaksız: yalnızca sayılar ve düğmeler
                 kisa = function() return bolum(etiket, raf_dugmeleri()) end,
@@ -682,18 +741,26 @@ return function(BinKitap)
 
         -- 5) Dosya tarayıcısında kütüphane kısayolları
         if not v.okuyucu then
-            bolumler[#bolumler + 1] = { ad = "kutuphane", w = bolum(_("KÜTÜPHANE"), dugmeler({
-                {
-                    { text = _("Okuyacaklarıma ekle"), callback = kapat_ve(function() self:okuyacaklaraEkle() end) },
-                    { text = _("Okuduklarımı aktar"), callback = kapat_ve(function() self:okuduklarimiAktar() end) },
-                },
-                {
-                    { text = _("Kütüphaneyi eşleştir"), callback = kapat_ve(function() self:kutuphaneEslestir() end) },
-                    { text = _("1000Kitap kitaplığım"), callback = function()
-                        self:menudenDiyalog(_("1000Kitap kitaplığım"), self:kitaplikMenusu())
-                    end },
-                },
-            })) }
+            local ilk_satir = {
+                { text = _("Okuyacaklarıma ekle"), callback = function() self:okuyacaklaraEkle() end },
+                { text = _("Okuduklarımı aktar"), callback = kapat_ve(function() self:okuduklarimiAktar() end) },
+            }
+            bolumler[#bolumler + 1] = { ad = "kutuphane", kisa_sira = 1,
+                w = bolum(_("KÜTÜPHANE"), dugmeler({
+                    ilk_satir,
+                    {
+                        { text = _("Durumları al"), callback = kapat_ve(function() self:durumlariAl() end) },
+                        { text = _("Kütüphaneyi eşleştir"), callback = kapat_ve(function() self:kutuphaneEslestir() end) },
+                    },
+                    {
+                        { text = _("Kitaplığım ›"), callback = function()
+                            self:menudenDiyalog(_("1000Kitap kitaplığım"), self:kitaplikMenusu())
+                        end },
+                        { text = _("İleti yaz"), callback = function() self:iletiYaz() end },
+                    },
+                })),
+                kisa = function() return bolum(_("KÜTÜPHANE"), dugmeler({ ilk_satir })) end,
+            }
         end
 
         -- 6) Alt satır: bekleyenler, seçim bekleyenler / hata günlüğü, yenile (tek satır)
@@ -714,6 +781,7 @@ return function(BinKitap)
             alt_satir[#alt_satir + 1] = { text = T(_("Hata günlüğü (%1)"), v.hata),
                 callback = function() self:hataGunluguMenusu().sub_item_table[1].callback() end }
         end
+        alt_satir[#alt_satir + 1] = { text = _("Menü ›"), callback = function() self:tumOzellikler() end }
         alt_satir[#alt_satir + 1] = { text = _("Yenile"), callback = function()
             if not NetworkMgr:isOnline() then return ekran:yenile() end
             self:hedefTazele(function()

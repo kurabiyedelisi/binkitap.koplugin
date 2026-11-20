@@ -1778,6 +1778,15 @@ function BinKitap:onPageUpdate()
     end
 end
 
+--- Eklentinin bağlı olduğu ekran (dosya tarayıcısı ya da okuyucu) kapanınca 1000Kitap ekranı da kapansın;
+-- yoksa eski bir eklenti örneğine bağlı ekran yığında kalır.
+function BinKitap:onCloseWidget()
+    if self._ekran then
+        UIManager:close(self._ekran)
+        self._ekran = nil
+    end
+end
+
 function BinKitap:onCloseDocument()
     self:araVer()
     self:arkaPlanGonder(true)

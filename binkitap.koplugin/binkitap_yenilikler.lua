@@ -3,6 +3,15 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.1.0",
+        maddeler = {
+            "1000Kitap ekranından artık her şey yapılabiliyor: alttaki \"Menü\" eklentinin bütün özelliklerini ve ayarlarını açar. Alt menüden \"‹ Geri\" ile dönülür, açık/kapalı ayarlar ☑/☐ ile görünür.",
+            "Okurken yeni kısayollar: Kitap bilgisi, Alıntılar, İncelemeler, Durum (okuma durumu ve baskı).",
+            "Dosya tarayıcısında Kütüphane bölümüne Durumları al ve İleti yaz eklendi.",
+            "Hedef satırına dokununca okuma hedefi menüsü açılır.",
+        },
+    },
+    {
         surum = "1.0.2",
         maddeler = {
             "Düzeltme: Okuyacaklarıma ekle → Kobo'dan seç listesinde uzun klasör adı olan kitaba gelince KOReader çöküyordu. Listelerde sağdaki yazı artık kısaltılıyor.",

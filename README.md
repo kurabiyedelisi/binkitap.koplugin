@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.0.2 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.1.0 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -65,14 +65,16 @@ Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "gir
 
 | Bölüm | Okurken | Dosya tarayıcısında |
 | --- | --- | --- |
-| Kitap | Şu an okuduğun: kapak, durum, sayfa, yüzde, 1000Kitap puanı; **Vurgular**, **İleti yaz**, **Puan ver**, **Bitirdim** | Son okuduğun; **Devam et** |
-| Hedef | Bu yılın hedefi, kaç kitap kaldığı | Aynı |
+| Kitap | Şu an okuduğun: kapak, durum, sayfa, yüzde, 1000Kitap puanı; **Vurgular**, **İleti yaz**, **Puan ver**, **Bitirdim**, **Kitap bilgisi**, **Alıntılar**, **İncelemeler**, **Durum** | Son okuduğun; **Devam et** |
+| Hedef | Bu yılın hedefi, kaç kitap kaldığı; dokununca hedef menüsü | Aynı |
 | Okuyacaklarım | 4 kitaplık raf (Kobo'nda olanlar önce, kapaklarıyla); dokununca açılır. **Ne okusam?**, **Tümü**, **Listeler** | Aynı |
 | Son alıntın | Gönderdiğin son alıntı | Aynı |
-| Kütüphane | — | Okuyacaklarıma ekle, Okuduklarımı aktar, Kütüphaneyi eşleştir, 1000Kitap kitaplığım |
-| Alt satır | Bekleyen işler (dokununca gönderir), seçim bekleyen kitaplar ya da hata günlüğü, **Yenile** | Aynı |
+| Kütüphane | — | Okuyacaklarıma ekle, Okuduklarımı aktar, Durumları al, Kütüphaneyi eşleştir, Kitaplığım, İleti yaz |
+| Alt satır | Bekleyen işler (dokununca gönderir), seçim bekleyen kitaplar ya da hata günlüğü, **Menü**, **Yenile** | Aynı |
 
-Ekran hafızadaki bilgilerle hemen açılır, kendi başına internete çıkmaz; yalnızca hedef bilgisi eskiyse ve Wi-Fi açıksa onu tazeler. **Yenile** hedefi ve Okuyacaklar listesini yeniden getirir. Ekran sığmazsa önce son alıntı, sonra raf kapakları gizlenir. Kapatmak için sağ üstteki çarpıya dokun ya da aşağı kaydır.
+**Menü** eklentinin bütün özelliklerini ve ayarlarını ekrandan çıkmadan açar: alt menülere girilir, **‹ Geri** ile dönülür; açık/kapalı ayarlar ☑/☐ ile görünür ve değiştirince hemen güncellenir.
+
+Ekran hafızadaki bilgilerle hemen açılır, kendi başına internete çıkmaz; yalnızca hedef bilgisi eskiyse ve Wi-Fi açıksa onu tazeler. **Yenile** hedefi ve Okuyacaklar listesini yeniden getirir. Ekran sığmazsa önce son alıntı gizlenir, sonra kütüphane kısayolları tek satıra iner, en son raf kapakları gizlenir. Kapatmak için sağ üstteki çarpıya dokun ya da aşağı kaydır.
 
 ### Eşleştirme
 
