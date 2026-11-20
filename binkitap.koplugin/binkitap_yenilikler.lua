@@ -3,6 +3,12 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.0.2",
+        maddeler = {
+            "Düzeltme: Okuyacaklarıma ekle → Kobo'dan seç listesinde uzun klasör adı olan kitaba gelince KOReader çöküyordu. Listelerde sağdaki yazı artık kısaltılıyor.",
+        },
+    },
+    {
         surum = "1.0.1",
         maddeler = {
             "Düzeltme: 1000Kitap ekranı açılırken KOReader'ın çökmesi giderildi.",

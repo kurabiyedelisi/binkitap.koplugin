@@ -261,7 +261,7 @@ return function(BinKitap)
             local yol = o.bul(k)
             local metin = (yol and "✓ " or "") .. k.adi .. ((k.yazar or "") ~= "" and (" — " .. k.yazar) or "")
             local p = BinKitap.puanYazi(k.puan)
-            local oge = { text = metin, mandatory = p, yol = yol, kitap = k }
+            local oge = { text = metin, mandatory = BinKitap.sagYazi(p), yol = yol, kitap = k }
             if yol then cihazda[#cihazda + 1] = oge else digerleri[#digerleri + 1] = oge end
         end
         local itemler = {}

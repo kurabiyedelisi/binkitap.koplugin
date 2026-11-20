@@ -516,6 +516,23 @@ function BinKitap:yayineviEkle(sonuclar, en_fazla)
     end
 end
 
+--- Listelerde satırın sağındaki yazı. KOReader bu yazı satırdan genişse çöktüğü için
+-- (MenuItem'da eksi genişlik) her zaman kısa tutulur: en fazla 32 harf.
+function BinKitap.sagYazi(s)
+    if s == nil then return nil end
+    s = tostring(s):gsub("%s+", " ")
+    if s == "" then return nil end
+    local harf = 0
+    for i = 1, #s do
+        local b = s:byte(i)
+        if b < 0x80 or b >= 0xC0 then
+            harf = harf + 1
+            if harf > 32 then return s:sub(1, i - 1) .. "…" end
+        end
+    end
+    return s
+end
+
 --- 1000Kitap genel puanı, kısa: "★ 7,8"
 function BinKitap.puanYazi(puan)
     puan = Api.puanOku(puan)

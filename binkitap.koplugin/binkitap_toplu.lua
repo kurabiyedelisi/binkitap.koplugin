@@ -68,7 +68,8 @@ return function(BinKitap)
             t[#t + 1] = { text = _("Hiçbirini seçme"), eylem = "hicbiri", separator = true }
             for i, o in ipairs(p.ogeler) do
                 if gorunur(o) then
-                    t[#t + 1] = { text = (o.secili and "☑ " or "☐ ") .. o.metin, mandatory = o.ek, indeks = i }
+                    -- Sağdaki yazı satırdan genişse KOReader çöküyor (eksi genişlik): kısa tut
+                    t[#t + 1] = { text = (o.secili and "☑ " or "☐ ") .. o.metin, mandatory = BinKitap.sagYazi(o.ek), indeks = i }
                 end
             end
             if filtre and #t == (p.bilgi and 5 or 4) then
@@ -773,7 +774,7 @@ return function(BinKitap)
             end
             for _i, yol in ipairs(yollar) do
                 local klasor = yol:match("^(.*)/[^/]+$") or ""
-                t[#t + 1] = { text = dosyaAdi(yol), mandatory = dosyaAdi(klasor), yol = yol }
+                t[#t + 1] = { text = dosyaAdi(yol), mandatory = BinKitap.sagYazi(dosyaAdi(klasor)), yol = yol }
             end
             return t
         end

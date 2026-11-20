@@ -411,7 +411,7 @@ return function(BinKitap)
                 local yol = bul(k.id)
                 local metin = T("%1. ", i) .. (yol and "✓ " or "") .. k.adi .. ((k.yazar or "") ~= "" and (" — " .. k.yazar) or "")
                 if k.durum and k.durum >= 0 and Api.DURUM_ADI[k.durum] then metin = metin .. " · " .. Api.DURUM_ADI[k.durum] end
-                t[#t + 1] = { text = metin, mandatory = BinKitap.puanYazi(k.puan), kitap = k, yol = yol }
+                t[#t + 1] = { text = metin, mandatory = BinKitap.sagYazi(BinKitap.puanYazi(k.puan)), kitap = k, yol = yol }
             end
             if sonraki then t[#t + 1] = { text = _("Daha fazla göster…"), daha = true } end
             return t
