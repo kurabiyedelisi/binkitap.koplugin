@@ -19,7 +19,10 @@ local DEPO = "kurabiyedelisi/binkitap.koplugin"
 local DAL = "main"
 local KLASOR = "binkitap.koplugin"
 local LISTE_URL = "https://api.github.com/repos/" .. DEPO .. "/contents/" .. KLASOR .. "?ref=" .. DAL
-local META_URL = "https://raw.githubusercontent.com/" .. DEPO .. "/" .. DAL .. "/" .. KLASOR .. "/_meta.lua"
+local HAM_URL = "https://raw.githubusercontent.com/" .. DEPO .. "/" .. DAL .. "/" .. KLASOR .. "/"
+local META_URL = HAM_URL .. "_meta.lua"
+local YENILIK_URL = HAM_URL .. "binkitap_yenilikler.lua"
+local YENILIK_DOSYASI = "binkitap_yenilikler.lua"
 local DENETIM_ARALIGI = 7 * 24 * 3600
 local KORUNAN = { ["ayar.lua"] = true }
 local planlandi = false   -- dosya tarayıcısı ve okuyucu aynı anda denetlemesin
@@ -84,6 +87,63 @@ local function dahaYeni(a, b)
     return false
 end
 
+--- Sürüm notları dosyasını boş bir ortamda okur (kod çalıştırmaz, yalnızca veri döner).
+local function yenilikleriCoz(icerik)
+    if type(icerik) ~= "string" or icerik == "" then return nil end
+    local fn
+    local sabitle = rawget(_G, "setfenv")
+    if sabitle then -- LuaJIT / Lua 5.1 (KOReader)
+        fn = (rawget(_G, "loadstring") or load)(icerik, "=yenilikler")
+        if fn then sabitle(fn, {}) end
+    else
+        fn = load(icerik, "=yenilikler", "t", {})
+    end
+    if not fn then return nil end
+    local ok, veri = pcall(fn)
+    if not ok or type(veri) ~= "table" then return nil end
+    local liste = {}
+    for _i, g in ipairs(veri) do
+        if type(g) == "table" and type(g.surum) == "string" and type(g.maddeler) == "table" then
+            local m = {}
+            for _j, x in ipairs(g.maddeler) do
+                if type(x) == "string" then m[#m + 1] = x end
+            end
+            liste[#liste + 1] = { surum = g.surum, maddeler = m }
+        end
+    end
+    return liste
+end
+
+--- eski < sürüm <= yeni aralığındaki notlar. eski yoksa yalnızca "yeni" sürümünkiler.
+local function yeniliklerMetni(liste, eski, yeni, kisa)
+    local parcalar = {}
+    for _i, g in ipairs(liste or {}) do
+        local alt_sinir = eski and dahaYeni(g.surum, eski) or (not eski and g.surum == yeni)
+        if alt_sinir and not dahaYeni(g.surum, yeni) then
+            local satirlar = {}
+            if not kisa then satirlar[1] = T(_("Sürüm %1"), g.surum) end
+            for _j, m in ipairs(g.maddeler) do
+                if kisa and #m > 110 then m = m:sub(1, 107):gsub("[\128-\191]*$", ""):gsub("[\192-\255]$", "") .. "…" end
+                satirlar[#satirlar + 1] = "• " .. m
+            end
+            parcalar[#parcalar + 1] = table.concat(satirlar, "\n")
+        end
+    end
+    if kisa then
+        local hepsi = table.concat(parcalar, "\n")
+        local satir_say, kes = 0, nil
+        for i = 1, #hepsi do
+            if hepsi:sub(i, i) == "\n" then
+                satir_say = satir_say + 1
+                if satir_say == 6 then kes = i; break end
+            end
+        end
+        if kes then hepsi = hepsi:sub(1, kes - 1) .. "\n…" end
+        return hepsi ~= "" and hepsi or nil
+    end
+    return #parcalar > 0 and table.concat(parcalar, "\n\n") or nil
+end
+
 local function klasorHazirla(lfs, yol)
     if lfs.attributes(yol, "mode") == "directory" then
         for ad in lfs.dir(yol) do
@@ -142,6 +202,7 @@ return function(BinKitap)
         local function bitir(hata)
             UIManager:close(bekle)
             if hata then
+                BinKitap.hataKaydet("guncelleme", "Güncelleme", hata)
                 self:hataGoster(T(_("Güncelleme kurulamadı: %1\n\nEklentinin şu anki sürümü olduğu gibi duruyor."), hata))
             end
         end
@@ -202,6 +263,7 @@ return function(BinKitap)
             self.settings:saveSetting("guncelleme_son_denetim", os.time())
             self.settings:flush()
             if not meta then
+                BinKitap.hataKaydet("ag", "Güncelleme denetimi", err)
                 if not sessiz then self:hataGoster(err) end
                 return
             end
@@ -222,9 +284,11 @@ return function(BinKitap)
                 end
                 return
             end
+            -- Sürüm notlarının kısa bir özeti (indirilemezse olmadan sor)
+            local notlar = yeniliklerMetni(yenilikleriCoz(indir(YENILIK_URL)), BinKitap.SURUM, yeni, true)
             UIManager:show(ConfirmBox:new{
                 text = T(_("1000Kitap eklentisinin yeni sürümü var: %1 (sendeki %2).\n\nŞimdi indirip kurayım mı? Ayarların, hesap bilgilerin ve bekleyen gönderilerin korunur."),
-                    yeni, BinKitap.SURUM),
+                    yeni, BinKitap.SURUM) .. (notlar and ("\n\n" .. _("Yenilikler:") .. "\n" .. notlar) or ""),
                 ok_text = _("Kur"),
                 cancel_text = _("Sonra"),
                 ok_callback = function() self:guncellemeKur(yeni) end,
@@ -250,8 +314,54 @@ return function(BinKitap)
         end)
     end
 
+    --- Kurulu sürümün notları
+    function BinKitap:yenilikListesi()
+        local dizin = self:eklentiDizini()
+        if not dizin then return nil end
+        local h = io.open(dizin .. "/" .. YENILIK_DOSYASI, "rb")
+        if not h then return nil end
+        local icerik = h:read("*a")
+        h:close()
+        return yenilikleriCoz(icerik)
+    end
+
+    --- eski verilirse ondan sonraki tüm sürümlerin, yoksa kurulu sürümün notları.
+    function BinKitap:yenilikleriGoster(eski)
+        local metin = yeniliklerMetni(self:yenilikListesi(), eski, BinKitap.SURUM)
+        if not metin then
+            return self:bildir(T(_("Sürüm %1 için not bulunamadı."), BinKitap.SURUM))
+        end
+        local ok, TextViewer = pcall(require, "ui/widget/textviewer")
+        local baslik = T(_("1000Kitap %1: neler var"), BinKitap.SURUM)
+        if ok and TextViewer then
+            UIManager:show(TextViewer:new{ title = baslik, text = metin })
+        else
+            self:bildir(baslik .. "\n\n" .. metin)
+        end
+    end
+
+    --- Açılışta: güncellemeden sonra yenilikleri bir kez gösterir.
+    function BinKitap:yenilikKontrol()
+        local onceki = self.settings:readSetting("son_gorulen_surum")
+        if onceki == BinKitap.SURUM then return end
+        self.settings:saveSetting("son_gorulen_surum", BinKitap.SURUM)
+        self.settings:flush()
+        if onceki and not dahaYeni(BinKitap.SURUM, onceki) then return end -- geri dönüş
+        -- Bu kaydı tutmayan eski sürümden mi geldi, yoksa ilk kurulum mu?
+        if not onceki and not (self.settings:readSetting("guncelleme_kurulan")
+                or self.settings:readSetting("eslesmeler") or BinKitap.Api:kimlikVar()) then
+            return
+        end
+        UIManager:scheduleIn(2, function() self:yenilikleriGoster(onceki) end)
+    end
+
     function BinKitap:guncellemeMenuOgeleri()
         return {
+            {
+                text = _("Bu sürümde neler var"),
+                keep_menu_open = true,
+                callback = function() self:yenilikleriGoster() end,
+            },
             {
                 text = T(_("Güncellemeleri denetle (sürüm %1)"), BinKitap.SURUM),
                 keep_menu_open = true,
@@ -270,5 +380,6 @@ return function(BinKitap)
         }
     end
 
-    BinKitap._guncelleme = { dahaYeni = dahaYeni, surumBul = surumBul, DEPO = DEPO }
+    BinKitap._guncelleme = { dahaYeni = dahaYeni, surumBul = surumBul, DEPO = DEPO,
+        yenilikleriCoz = yenilikleriCoz, yeniliklerMetni = yeniliklerMetni }
 end

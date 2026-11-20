@@ -841,15 +841,9 @@ return function(BinKitap)
     local kitaplik_onbellek = nil   -- { zaman, liste }
     local KITAPLIK_OMRU = 10 * 60
 
-    --- 1000Kitap kitaplığını sayfa sayfa getirir. Sayfalar arasında arayüze nefes aldırır,
-    -- ilerlemeyi gösterir; dokununca durur.
-    function BinKitap:kitaplikListesi(cb)
-        if not Api:kimlikVar() then return self:kimlikUyarisi() end
-        local kadi = self:kullaniciAdiGerekli()
-        if not kadi then return end
-        if kitaplik_onbellek and os.time() - kitaplik_onbellek.zaman < KITAPLIK_OMRU then
-            return cb(kitaplik_onbellek.liste)
-        end
+    --- Bir 1000Kitap rafını sayfa sayfa getirir. Sayfalar arasında arayüze nefes aldırır,
+    -- ilerlemeyi gösterir; dokununca durur (durdurulursa cb çağrılmaz).
+    function BinKitap:rafiGetir(kadi, raf, baslik, cb)
         NetworkMgr:runWhenOnline(function()
             local hepsi, sayfalama, sayfa, iptal = {}, nil, 0, false
             local kutu, kapatiyorum
@@ -857,7 +851,7 @@ return function(BinKitap)
                 if kutu then kapatiyorum = true; UIManager:close(kutu); kapatiyorum = false end
                 local k
                 k = InfoMessage:new{
-                    text = T(_("1000Kitap kitaplığın getiriliyor…\n\n%1 kitap\n\nDurdurmak için dokun."), #hepsi),
+                    text = T(_("%1\n\n%2 kitap\n\nDurdurmak için dokun."), baslik, #hepsi),
                     dismiss_callback = function()
                         if kapatiyorum then return end
                         if kutu == k then kutu = nil end
@@ -875,13 +869,12 @@ return function(BinKitap)
             adim = function()
                 if iptal then kapat(); return end
                 sayfa = sayfa + 1
-                local liste, sonraki_veya_err = Api:rafListesi(kadi, "kutuphanesi", sayfalama)
+                local liste, sonraki_veya_err = Api:rafListesi(kadi, raf, sayfalama)
                 if not liste then kapat(); return self:hataGoster(sonraki_veya_err) end
                 for _i, k in ipairs(liste) do hepsi[#hepsi + 1] = k end
                 sayfalama = sonraki_veya_err
                 if not sayfalama or sayfa >= 200 then
                     kapat()
-                    kitaplik_onbellek = { zaman = os.time(), liste = hepsi }
                     return cb(hepsi)
                 end
                 if sayfa % 3 == 0 then goster() end
@@ -889,6 +882,19 @@ return function(BinKitap)
             end
             goster()
             adim()
+        end)
+    end
+
+    function BinKitap:kitaplikListesi(cb)
+        if not Api:kimlikVar() then return self:kimlikUyarisi() end
+        local kadi = self:kullaniciAdiGerekli()
+        if not kadi then return end
+        if kitaplik_onbellek and os.time() - kitaplik_onbellek.zaman < KITAPLIK_OMRU then
+            return cb(kitaplik_onbellek.liste)
+        end
+        self:rafiGetir(kadi, "kutuphanesi", _("1000Kitap kitaplığın getiriliyor…"), function(hepsi)
+            kitaplik_onbellek = { zaman = os.time(), liste = hepsi }
+            cb(hepsi)
         end)
     end
 

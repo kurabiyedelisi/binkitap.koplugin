@@ -5,8 +5,8 @@
 - Okuyacaklarım koleksiyonu: listedeki ve Kobo'da bulunan kitaplar KOReader koleksiyonuna
 - Kitap bilgisi: puan, okunma, senin durumun, takip ettiklerinden okuyanlar
 - Popüler alıntılar
-- Okuma hedefi: göster / belirle
-- Uyku ekranında kendi alıntılarından biri
+- Okuma hedefi: göster / belirle; "Okudum" sonrası ilerleme bildirimi
+- Uyku ekranında kendi alıntılarından biri ve/veya hedef ilerlemesi
 ]]
 
 local ButtonDialog = require("ui/widget/buttondialog")
@@ -20,6 +20,7 @@ local T = require("ffi/util").template
 
 local LISTE_OMRU = 12 * 3600       -- okuyacaklar listesini bu kadar süre hatırla
 local ALINTI_OMRU = 24 * 3600      -- uyku ekranı alıntılarını günde bir yenile
+local HEDEF_OMRU = 12 * 3600       -- uyku ekranındaki hedef bilgisini günde iki kez tazele
 local KOLEKSIYON_ADI = "1000Kitap – Okuyacaklarım"
 
 return function(BinKitap)
@@ -63,11 +64,7 @@ return function(BinKitap)
                 and os.time() - (onb.zaman or 0) < LISTE_OMRU and type(onb.liste) == "table" then
             return cb(onb.liste)
         end
-        NetworkMgr:runWhenOnline(function()
-            local bekle = self:bekle(_("Okuyacakların getiriliyor…"))
-            local liste, err = Api:rafinTamami(kadi, "okuyacaklari", 40)
-            UIManager:close(bekle)
-            if not liste then return self:hataGoster(err) end
+        self:rafiGetir(kadi, "okuyacaklari", _("Okuyacakların getiriliyor…"), function(liste)
             self.settings:saveSetting("okuyacaklar_onbellek", { kadi = kadi, zaman = os.time(), liste = liste })
             self.settings:flush()
             cb(liste)
@@ -358,6 +355,70 @@ return function(BinKitap)
         }
     end
 
+    --- Hedef satırı: "2026 hedefi: 23 / 50 kitap" (önbellekten)
+    function BinKitap:hedefSatiri()
+        local sene = tonumber(os.date("%Y"))
+        local h = self.settings:readSetting("hedef_onbellek")
+        if type(h) ~= "table" or h.sene ~= sene or not h.hedef then return nil end
+        if h.okunan then
+            if h.okunan >= h.hedef then
+                return T(_("%1 hedefi tamam: %2 / %3 kitap"), sene, h.okunan, h.hedef)
+            end
+            return T(_("%1 hedefi: %2 / %3 kitap"), sene, h.okunan, h.hedef)
+        end
+        return T(_("%1 hedefi: %2 kitap"), sene, h.hedef)
+    end
+
+    --- 1000Kitap'tan hedefi tazeler. cb(h) (h nil olabilir)
+    function BinKitap:hedefTazele(cb)
+        local sene = tonumber(os.date("%Y"))
+        local h = Api:okumaHedefi(sene)
+        if h then
+            if h.hedef then
+                self.settings:saveSetting("hedef_onbellek",
+                    { sene = sene, hedef = h.hedef, okunan = h.okunan, zaman = os.time() })
+            else
+                self.settings:delSetting("hedef_onbellek")
+            end
+            self.settings:flush()
+        end
+        if cb then cb(h) end
+    end
+
+    --- "Okudum" gönderildikten sonra hedef ilerlemesini kısa bir bildirimle gösterir.
+    -- Toplu gönderimde tek bildirim olsun diye gönderim bitene kadar bekler.
+    function BinKitap:hedefBildirimiPlanla()
+        if not self.settings:nilOrTrue("hedef_bildirimi") then return end
+        if self._hedef_planli then UIManager:unschedule(self._hedef_planli) end
+        local f
+        f = function()
+            if BinKitap.gonderimSuruyor() then return UIManager:scheduleIn(5, f) end
+            self._hedef_planli = nil
+            if not NetworkMgr:isOnline() then return end
+            local onceki = self.settings:readSetting("hedef_onbellek")
+            self:hedefTazele(function(h)
+                if not h or not h.hedef or not h.okunan then return end
+                local metin
+                if h.okunan >= h.hedef then
+                    local ilk_kez = type(onceki) == "table" and onceki.okunan and onceki.okunan < h.hedef
+                    metin = ilk_kez and T(_("Tebrikler! %1 okuma hedefini tamamladın: %2 / %3 kitap."), os.date("%Y"), h.okunan, h.hedef)
+                        or T(_("%1 hedefin: %2 / %3 kitap. Hedefin üstündesin."), os.date("%Y"), h.okunan, h.hedef)
+                else
+                    local kalan_gun = math.max(1, tonumber(os.date("%j", os.time{ year = tonumber(os.date("%Y")), month = 12, day = 31 }))
+                        - tonumber(os.date("%j")))
+                    local kalan = h.hedef - h.okunan
+                    local hafta = math.max(1, math.floor(kalan_gun / 7 + 0.5))
+                    metin = T(_("%1 hedefin: %2 / %3 kitap.\n%4 kitap kaldı; yıl sonuna %5 hafta var."),
+                        os.date("%Y"), h.okunan, h.hedef, kalan, hafta)
+                end
+                UIManager:show(InfoMessage:new{ text = metin, timeout = 6 })
+                if self.uykuMesajiGuncelle then self:uykuMesajiGuncelle() end
+            end)
+        end
+        self._hedef_planli = f
+        UIManager:scheduleIn(4, f)
+    end
+
     -------------------------------------------------------------------------
     -- Uyku ekranında alıntı
     -------------------------------------------------------------------------
@@ -375,13 +436,33 @@ return function(BinKitap)
     end
 
     function BinKitap:uykuMesajiGuncelle()
-        if not self.settings:isTrue("uyku_alinti") or not G_reader_settings then return end
+        local alinti_acik, hedef_acik = self.settings:isTrue("uyku_alinti"), self.settings:isTrue("uyku_hedef")
+        if not (alinti_acik or hedef_acik) or not G_reader_settings then return end
+        local parcalar = {}
         local onb = self.settings:readSetting("alintilarim")
-        if type(onb) == "table" and type(onb.liste) == "table" and #onb.liste > 0 then
+        if alinti_acik and type(onb) == "table" and type(onb.liste) == "table" and #onb.liste > 0 then
             local soz = Y.kirp(onb.liste[math.random(1, #onb.liste)]):gsub("%s+", " ")
-            soz = kisalt(soz, 450):gsub("%%", "％") -- % işareti mesajda özel anlam taşıyabilir
-            G_reader_settings:saveSetting("screensaver_message", "“" .. soz .. "”")
+            soz = kisalt(soz, 450)
+            parcalar[#parcalar + 1] = "“" .. soz .. "”"
         end
+        if hedef_acik then
+            local satir = self:hedefSatiri()
+            if satir then parcalar[#parcalar + 1] = satir end
+            local h = self.settings:readSetting("hedef_onbellek")
+            local eski_hedef = type(h) ~= "table" or os.time() - (h.zaman or 0) > HEDEF_OMRU
+            if eski_hedef and Api:kimlikVar() and NetworkMgr:isOnline() and not self.hedef_yenileniyor then
+                self.hedef_yenileniyor = true
+                UIManager:scheduleIn(12, function()
+                    self:hedefTazele(function() self.hedef_yenileniyor = false end)
+                end)
+            end
+        end
+        if #parcalar > 0 then
+            -- % işareti mesajda özel anlam taşıyabilir
+            local mesaj = table.concat(parcalar, "\n\n"):gsub("%%", "％")
+            G_reader_settings:saveSetting("screensaver_message", mesaj)
+        end
+        if not alinti_acik then return end
         -- Günde bir kez, bağlıysa listeyi tazele
         local eski = type(onb) ~= "table" or os.time() - (onb.zaman or 0) > ALINTI_OMRU
         if eski and self.kullanici_adi and NetworkMgr:isOnline() and not self.uyku_yenileniyor then
@@ -406,12 +487,7 @@ return function(BinKitap)
             UIManager:close(bekle)
             if not liste then return self:hataGoster(err) end
             if #liste == 0 then return self:bildir(_("1000Kitap'ta henüz alıntın yok.")) end
-            if not self.settings:readSetting("uyku_eski") then
-                self.settings:saveSetting("uyku_eski", {
-                    mesaj = G_reader_settings:readSetting("screensaver_message"),
-                    goster = G_reader_settings:readSetting("screensaver_show_message"),
-                })
-            end
+            self:uykuEskiyiSakla()
             self.settings:saveSetting("alintilarim", { zaman = os.time(), liste = liste })
             self.settings:makeTrue("uyku_alinti")
             self.settings:flush()
@@ -421,7 +497,40 @@ return function(BinKitap)
         end)
     end
 
-    function BinKitap:uykuKapat()
+    function BinKitap:uykuEskiyiSakla()
+        if not self.settings:readSetting("uyku_eski") and G_reader_settings then
+            self.settings:saveSetting("uyku_eski", {
+                mesaj = G_reader_settings:readSetting("screensaver_message"),
+                goster = G_reader_settings:readSetting("screensaver_show_message"),
+            })
+        end
+    end
+
+    function BinKitap:uykuHedefAc()
+        if not Api:kimlikVar() then return self:kimlikUyarisi() end
+        NetworkMgr:runWhenOnline(function()
+            self:hedefTazele(function(h)
+                if not h then return self:hataGoster(_("Okuma hedefin alınamadı.")) end
+                if not h.hedef then
+                    return self:bildir(T(_("%1 için bir okuma hedefin yok. Önce \"Okuma hedefi → Hedef belirle\"."), os.date("%Y")))
+                end
+                self:uykuEskiyiSakla()
+                self.settings:makeTrue("uyku_hedef")
+                self.settings:flush()
+                G_reader_settings:saveSetting("screensaver_show_message", true)
+                self:uykuMesajiGuncelle()
+                self:bildir(T(_("Uyku ekranında görünecek: %1"), self:hedefSatiri() or ""))
+            end)
+        end)
+    end
+
+    --- Uyku ekranı seçeneklerinden birini kapatır; ikisi de kapanınca eski mesaj geri gelir.
+    function BinKitap:uykuKapat(hangisi)
+        self.settings:saveSetting(hangisi == "hedef" and "uyku_hedef" or "uyku_alinti", false)
+        if self.settings:isTrue("uyku_alinti") or self.settings:isTrue("uyku_hedef") then
+            self.settings:flush()
+            return self:uykuMesajiGuncelle()
+        end
         local eski = self.settings:readSetting("uyku_eski")
         if type(eski) == "table" and G_reader_settings then
             if eski.mesaj == nil then G_reader_settings:delSetting("screensaver_message")
@@ -430,18 +539,30 @@ return function(BinKitap)
             else G_reader_settings:saveSetting("screensaver_show_message", eski.goster) end
         end
         self.settings:delSetting("uyku_eski")
-        self.settings:saveSetting("uyku_alinti", false)
         self.settings:flush()
     end
 
     function BinKitap:uykuMenuOgesi()
         return {
-            text = _("Uyku ekranında alıntılarım"),
-            checked_func = function() return self.settings:isTrue("uyku_alinti") end,
-            callback = function()
-                if self.settings:isTrue("uyku_alinti") then self:uykuKapat() else self:uykuAc() end
-            end,
-            help_text = _("1000Kitap'taki kendi alıntılarından rastgele biri uyku ekranında mesaj olarak görünür. Kapatınca eski uyku ekranı mesajın geri gelir."),
+            text = _("Uyku ekranı"),
+            sub_item_table = {
+                {
+                    text = _("Alıntılarımdan biri"),
+                    checked_func = function() return self.settings:isTrue("uyku_alinti") end,
+                    callback = function()
+                        if self.settings:isTrue("uyku_alinti") then self:uykuKapat("alinti") else self:uykuAc() end
+                    end,
+                    help_text = _("1000Kitap'taki kendi alıntılarından rastgele biri uyku ekranında mesaj olarak görünür. Kapatınca eski uyku ekranı mesajın geri gelir."),
+                },
+                {
+                    text = _("Okuma hedefi ilerlemesi"),
+                    checked_func = function() return self.settings:isTrue("uyku_hedef") end,
+                    callback = function()
+                        if self.settings:isTrue("uyku_hedef") then self:uykuKapat("hedef") else self:uykuHedefAc() end
+                    end,
+                    help_text = _("Uyku ekranının mesajına \"2026 hedefi: 23 / 50 kitap\" gibi bir satır ekler. Alıntıyla birlikte de açılabilir."),
+                },
+            },
         }
     end
 end

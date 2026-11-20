@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 0.2.9 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 0.3.0 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -13,13 +13,13 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 - **Renge göre kendiliğinden gönderir.** Örneğin sarı vurgular herkese açık alıntı, mavi vurgular gizli alıntı olarak gider.
 - **İleti yazdırır.** Alıntı olmayan kendi yazını 1000Kitap'ta ileti olarak paylaşabilirsin, okuduğun kitabı etiketleyerek.
 - **Geçmişini aktarır.** KOReader'da daha önce bitirdiğin kitapları bulup 1000Kitap'ta "Okudum" yapar, istersen o kitaplardaki vurguları da gönderir.
-- **Okuma durumunu takip eder.** Kitabı açınca "Okuyorum" yapar. Kitap bitince tek ekranda "Okudum", puan ve kısa inceleme alır.
+- **Okuma durumunu iki yönlü takip eder.** Kitabı açınca "Okuyorum" yapar. Kitap bitince tek ekranda "Okudum", puan ve kısa inceleme alır. 1000Kitap'ta değiştirdiğin durum da KOReader'a yansıyabilir.
 - **Bütün kütüphaneni eşleştirir.** Kobo'daki kitapları 1000Kitap'taki karşılıklarıyla eşleştirir, emin olamadıklarını sana sorar.
 - **1000Kitap kitaplığını yönetir.** Kobo'daki kitapları kitaplığına seçerek ekler, seçtiklerini çıkarır.
 - **Okuyacaklar listeni doldurur.** Kobo'daki kitaplarından seçerek ya da 1000Kitap'ta arayarak "Okuyacağım" listene ekler.
-- **Keşfetmene yardım eder.** Ne okusam?, Okuyacaklarım koleksiyonu, popüler alıntılar, okuma hedefi var. Uyku ekranında kendi alıntılarından birini gösterebilir.
+- **Keşfetmene yardım eder.** Ne okusam?, Okuyacaklarım koleksiyonu, popüler alıntılar, okuma hedefi var. "Okudum"dan sonra hedefinde nerede olduğunu söyler. Uyku ekranında kendi alıntılarından birini ve hedef ilerlemeni gösterebilir.
 - **İnternet olmadan da çalışır.** Wi-Fi kapalıyken yaptıkların sıraya girer, bağlanınca gönderilir.
-- **Kendini günceller.** Yeni sürüm çıktığında sorar, onay verirsen kurar.
+- **Kendini günceller.** Yeni sürüm çıktığında neler değiştiğiyle birlikte sorar, onay verirsen kurar.
 
 ## Kurulum
 
@@ -77,6 +77,7 @@ Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "gir
 - **Gizli alıntı:** Alıntı penceresinde **Gizli yap**'a dokun. Gizli alıntıları 1000Kitap'ta yalnızca sen görürsün: kitabın sayfasında özel notların arasında durur, profilinde ve akışta görünmez. Hep gizli paylaşmak istersen **Ayarlar → Alıntıları varsayılan olarak gizli paylaş**'ı aç. Toplu gönderimde, vurgu aktarımında ve renk ayarlarında da gizli seçeneği var.
 - **Bu kitabın vurgularını gönder:** Hepsini ya da seçtiklerini, herkese açık ya da gizli gönderir. Daha önce gönderilen vurgu tekrar gitmez.
 - **Okuma durumu:** Kitabı açınca "Okuyorum" olur; daha önce okuduğun kitaba dokunulmaz. KOReader'da kitabı Bitti, Beklemede ya da Okunuyor yaparsan 1000Kitap'a da yansır.
+- **Ters yön:** Durumu 1000Kitap'ta (sitede ya da telefonda) değiştirdiysen, kitabı Kobo'da açınca KOReader'daki durumu da değiştirmeyi önerir: Okudum → Bitti, Yarım bıraktım → Beklemede, Okuyorum → Okunuyor. Kapatmak için: **Ayarlar → 1000Kitap'taki değişiklikleri KOReader'a yansıt.**
 - **Bitiş ekranı:** Kitap bitince "Okudum", 1–10 puan ve inceleme tek ekranda.
 - **Okuma ilerlemesi ve seanslar** (varsayılan kapalı): Sayfanı ve okuma süreni gönderir.
   1000Kitap'ta "Okuduğun sayfa sayısını güncellerken yeni bir gönderi paylaşılsın mı?" ayarı açıksa her güncelleme herkese açık bir gönderi olur; açmadan önce o ayarı sitede kapat.
@@ -91,6 +92,16 @@ Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "gir
 4. Ardından vurgusu olan kitaplar listelenir; hangilerinin vurgularını göndereceğini seçersin, hiçbirini seçmeden kapatabilirsin. Vurgular herkese açık ya da gizli alıntı olarak gider; sayfa numaraları basılı baskıya göre hesaplanır.
 
 Daha önce gönderilmiş vurgular tekrar gönderilmez.
+
+### Durumları 1000Kitap'tan al
+
+**Araçlar → 1000Kitap → Durumları 1000Kitap'tan al.** Okuduklarını aktar'ın tersi: 1000Kitap'ta "Okudum" ya da "Yarım bıraktım" yaptığın kitapları KOReader'da da işaretler.
+
+1. Eşleşmiş kitapların 1000Kitap'taki durumlarına birer saniye arayla bakılır; ilerleme ekranda görünür, dokununca durur. Son 6 saatte bakılmış kitaplar yeniden sorulmaz, böylece durdurup devam ettirmek hızlıdır.
+2. KOReader'dakinden farklı olanlar listelenir. KOReader'da hiç durumu olmayanlar ve 1000Kitap'ta sonradan değişenler seçili gelir. KOReader'da "Okunuyor" olup 1000Kitap'ta "Okudum" olanlar listede durur ama seçili gelmez (yeniden okuyor olabilirsin); kitabın yüzde kaçının okunduğu yanında yazar.
+3. KOReader'da "Bitti" ya da "Beklemede" olan bir kitaba, 1000Kitap'ta sonradan değişmediyse dokunulmaz.
+
+Bu işaretlemeler 1000Kitap'a geri gönderilmez.
 
 ### Okuyacaklar listesi
 
@@ -122,20 +133,21 @@ Yazdığın metin taslak olarak saklanır: pencereyi kapatsan da, 1000Kitap ilet
 - **Popüler alıntılar:** Okuduğun kitabın en çok beğenilen alıntıları.
 - **Ne okusam?:** Okuyacaklarım listenden rastgele 10 kitap; Kobo'nda olanlar dokununca açılır.
 - **Okuyacaklarım koleksiyonu:** Listedeki ve Kobo'nda bulunan kitapları "1000Kitap – Okuyacaklarım" koleksiyonunda toplar.
-- **Okuma hedefi:** Bu yılın hedefini gösterir ya da belirlersin.
-- **Uyku ekranında alıntılarım:** Kendi alıntılarından biri uyku ekranında görünür.
+- **Okuma hedefi:** Bu yılın hedefini gösterir ya da belirlersin. Bir kitap "Okudum" olunca kısa bir bildirimle hedefinde nerede olduğunu söyler ("50 kitaptan 23'ü; 27 kitap kaldı, yıl sonuna 6 hafta var"). Kapatmak için: **Ayarlar → "Okudum"dan sonra hedef ilerlemesini göster.**
+- **Uyku ekranı** (Ayarlar): **Alıntılarımdan biri** kendi alıntılarından birini, **Okuma hedefi ilerlemesi** "2026 hedefi: 23 / 50 kitap" satırını uyku ekranında gösterir. İkisi birlikte de açılabilir; ikisini de kapatınca eski uyku ekranı mesajın geri gelir.
 
 ### Kısayollar ve çevrimdışı kullanım
 
 - Wi-Fi kapalıyken yaptığın her şey sıraya girer.
 - **Toplu işler arka planda gider.** Bir seferde 5'ten fazla iş sıraya girerse (kitaplığa toplu ekleme, toplu "Okudum", vurgu aktarımı gibi) ekran meşgul edilmez: işler birer birer, birkaç saniye arayla gönderilir; sayfa yeni çevrildiyse biraz beklenir. Wi-Fi giderse durur, gelince ya da KOReader yeniden açılınca kaldığı yerden sürer. Bitince kısa bir özet görünür.
 - **Bekleyen gönderiler** menüde kaç iş kaldığını ve arka planda gönderim sürüyorsa bunu gösterir. Dokununca beklemeden hepsini hemen gönderir, basılı tutunca sırayı temizler.
+- **Uykuya geçerken gönderim:** Cihaz uykuya geçerken Wi-Fi açıksa sıradaki birkaç iş (en fazla 5, en fazla 8 saniye) hemen gönderilir. Kalanlar cihaz uyanınca ya da Wi-Fi bağlanınca sürer. **Ayarlar → Uykuya geçerken bekleyenleri gönder** ile kapatılabilir.
 - **İhtiyaç anında Wi-Fi** açıksa kitabı kapattığında Wi-Fi'yi açar, gönderir, kapatır.
 - KOReader'ın hareket ayarlarında dört eylem var: **1000Kitap: bekleyenleri gönder**, **1000Kitap: Okuyacaklarıma ekle**, **1000Kitap: ileti yaz**, **1000Kitap: ne okusam?**
 
 ## Güncelleme
 
-**Araçlar → 1000Kitap → Ayarlar → Güncellemeleri denetle.** Yeni sürüm varsa sorar; onaylarsan indirir ve KOReader'ı yeniden başlatmanı ister. "Haftada bir kendiliğinden denetle" açıksa Wi-Fi bağlandığında haftada bir bakar, sormadan hiçbir şey kurmaz.
+**Araçlar → 1000Kitap → Ayarlar → Güncellemeleri denetle.** Yeni sürüm varsa yeniliklerin kısa bir özetiyle sorar; onaylarsan indirir ve KOReader'ı yeniden başlatmanı ister. Yeniden başlattıktan sonra neler değiştiği bir kez gösterilir; sonradan **Ayarlar → Bu sürümde neler var** ile tekrar bakabilirsin. "Haftada bir kendiliğinden denetle" açıksa Wi-Fi bağlandığında haftada bir bakar, sormadan hiçbir şey kurmaz.
 
 Güncellemede hesap bilgilerin, ayarların ve bekleyen gönderilerin korunur. Dosyalar kurulmadan önce denetlenir; bir sorun olursa mevcut sürüm olduğu gibi kalır. Önceki sürüm eklenti klasöründeki `.yedek` klasöründe durur.
 
@@ -150,10 +162,13 @@ Güncellemede hesap bilgilerin, ayarların ve bekleyen gönderilerin korunur. Do
 | Kitap yanlış baskıyla eşleşmiş | Okurken **Baskıyı değiştir**, ya da dosyaya uzun bas → **Eşleşmeyi değiştir.** |
 | Toplu işler hemen gitmiyor | Bilerek böyle: arka planda yavaş yavaş gönderilir. Acelen varsa **Bekleyen gönderiler**'e dokun. |
 | Kütüphane eşleştirmesi yavaş | Bilerek böyle: cihazı kilitlememek için kitaplar arasında bekler. İstediğin an durdurup sonra devam edebilirsin. |
-| Gönderiler gitmiyor | Wi-Fi'yi aç ya da **Bekleyen gönderiler**'e dokun. |
+| Gönderiler gitmiyor | Wi-Fi'yi aç ya da **Bekleyen gönderiler**'e dokun. Sebebini **Ayarlar → Hata günlüğü**'nde görebilirsin. |
+| Bir şey ters gitti, ne olduğunu anlamadım | **Ayarlar → Hata günlüğü → Göster.** Son 50 hata tarih, işlem ve sebebiyle durur; aynı hata art arda gelirse tek satırda sayılır. Sorun bildirirken buradakini yazman yeterli. |
+| Okuyacaklar listesi uzun sürüyor | Liste sayfa sayfa gelir; kaç kitabın geldiği ekranda görünür, dokununca durur. Liste 12 saat hatırlanır. |
 
 ## Gizlilik
 
 - Hesap kodların yalnızca Kobo'ndaki `ayar.lua` dosyasında ve eklentinin ayarlarında durur, 1000Kitap dışında hiçbir yere gönderilmez. Bu kodlar hesabının anahtarıdır, kimseyle paylaşma.
-- Eklenti, güncelleme denetimi dışında yalnızca 1000Kitap'la konuşur. Güncelleme denetimi bu depodaki sürüm dosyasını okur.
+- Eklenti, güncelleme denetimi dışında yalnızca 1000Kitap'la konuşur. Güncelleme denetimi bu depodaki sürüm ve sürüm notu dosyalarını okur.
+- Hata günlüğü yalnızca Kobo'nda durur; hiçbir yere gönderilmez ve hesap kodlarını içermez.
 - 1000Kitap'ta senin eklediğin hiçbir şeyi kendiliğinden silmez. Kitaplığından bir kitap ancak sen seçip onaylarsan çıkarılır; tek istisna, eşleşmeyi değiştirdiğinde eklentinin kendi eklediği eski baskıdır.

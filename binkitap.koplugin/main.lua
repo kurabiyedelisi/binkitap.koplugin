@@ -87,6 +87,7 @@ function BinKitap:init()
         ORTAK.settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/binkitap.lua")
     end
     self.settings = ORTAK.settings
+    Api.gunluk = BinKitap.hataKaydet
     self:kimlikYukle()
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
@@ -110,6 +111,7 @@ function BinKitap:init()
     end
     if self.dosyaMenusunuKaydet then self:dosyaMenusunuKaydet() end
     if not self.ui.document and self.ilkAktarimSor then self:ilkAktarimSor() end
+    if self.yenilikKontrol then self:yenilikKontrol() end
     -- KOReader yeniden açıldıysa yarım kalan kalabalık sırayı sürdür
     if not ORTAK.arka_plan and Api:kimlikVar() and #self:kuyruk() > TOPLU_ESIK and NetworkMgr:isOnline() then
         UIManager:scheduleIn(10, function() self:yavasGonder() end)
@@ -203,6 +205,100 @@ function BinKitap:kullaniciAdiGerekli()
         text = _("Bu özellik için 1000Kitap kullanıcı adın gerekli (profil adresindeki ad, ör. 1000kitap.com/KullaniciAdin).\n\nAyar.lua dosyasına kullanici_adi olarak ya da 1000Kitap → Ayarlar → Hesap bilgileri'nden ekleyebilirsin."),
     })
     return nil
+end
+
+---------------------------------------------------------------------------
+-- Hata günlüğü: son 50 hata; aynı hata art arda gelirse sayacı artar
+---------------------------------------------------------------------------
+
+local ISLEM_ADI = {
+    ["alintilar/alintiEkle"] = "Alıntı", ["koleksiyonlar/not-ayarla"] = "Gizli alıntı",
+    ["kitaplar/kitapKutuphanemeEkle"] = "Kitaplık", ["kitaplar/kitapOku"] = "Okuma durumu",
+    ["diger/arama"] = "Arama", ["uyeler/kitaplar/liste"] = "Raf listesi", ["iletiler/iletiEkle"] = "İleti",
+    ["kitaplar/kitapPuanVer"] = "Puan", ["kitaplar/kitapIncelemeKaydet"] = "İnceleme",
+    ["kitaplar/kitapSayfaGuncelle"] = "İlerleme", ["uyeler/okumalar/gunluk/seansTamamla"] = "Okuma seansı",
+    ["uye/kitap/modalVeBasimlar"] = "Durum sorgusu", ["kitaplar/basimlar"] = "Baskılar",
+    ["kitaplar/kitapCek"] = "Kitap bilgisi",
+}
+local HATA_TURU = { ag = "bağlantı", yetki = "oturum", sunucu = "1000Kitap reddetti" }
+
+--- Günlüğe yazmadan önce hesap kodlarına benzeyen her şeyi gizle.
+local function kodlariGizle(m)
+    m = tostring(m or "?")
+    for _i, k in ipairs({ Api.oturum_kodu, Api.cihaz_kodu }) do
+        if type(k) == "string" and #k >= 6 then
+            m = m:gsub(k:gsub("%p", "%%%0"), "•••")
+        end
+    end
+    return (m:gsub("%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x", "•••"))
+end
+
+function BinKitap.hataKaydet(tur, yer, mesaj)
+    local st = ORTAK.settings
+    if not st then return end
+    mesaj = kodlariGizle(mesaj)
+    local g = st:readSetting("hata_gunlugu") or {}
+    local son = g[#g]
+    local simdi = os.time()
+    local islem = ISLEM_ADI[yer or ""] or yer or "?"
+    if son and son.islem == islem and son.mesaj == mesaj and simdi - (son.zaman or 0) < 600 then
+        son.sayi = (son.sayi or 1) + 1
+        son.zaman = simdi
+    else
+        g[#g + 1] = { zaman = simdi, tur = tur, islem = islem, mesaj = mesaj, sayi = 1 }
+        while #g > 50 do table.remove(g, 1) end
+    end
+    st:saveSetting("hata_gunlugu", g)
+    -- Ağ hataları sık ve zararsız: diske her seferinde yazma
+    if tur ~= "ag" then st:flush() end
+end
+
+function BinKitap:hataSayisi()
+    return #(self.settings:readSetting("hata_gunlugu") or {})
+end
+
+function BinKitap:hataGunluguMetni()
+    local g = self.settings:readSetting("hata_gunlugu") or {}
+    if #g == 0 then return _("Kayıtlı hata yok.") end
+    local satirlar = {}
+    for i = #g, 1, -1 do
+        local h = g[i]
+        local ust = os.date("%d.%m %H:%M", h.zaman or 0) .. " · " .. h.islem .. " · " .. (HATA_TURU[h.tur] or h.tur or "hata")
+        if (h.sayi or 1) > 1 then ust = ust .. T(_(" (%1 kez)"), h.sayi) end
+        satirlar[#satirlar + 1] = ust .. "\n" .. h.mesaj
+    end
+    return table.concat(satirlar, "\n\n")
+end
+
+function BinKitap:hataGunluguMenusu()
+    return {
+        text_func = function() return T(_("Hata günlüğü (%1)"), self:hataSayisi()) end,
+        sub_item_table = {
+            {
+                text = _("Göster"),
+                callback = function()
+                    local ok, TextViewer = pcall(require, "ui/widget/textviewer")
+                    local metin = self:hataGunluguMetni()
+                    if ok and TextViewer then
+                        UIManager:show(TextViewer:new{ title = _("1000Kitap hata günlüğü"), text = metin })
+                    else
+                        UIManager:show(InfoMessage:new{ text = metin })
+                    end
+                end,
+            },
+            {
+                text = _("Temizle"),
+                enabled_func = function() return self:hataSayisi() > 0 end,
+                callback = function()
+                    self.settings:delSetting("hata_gunlugu")
+                    self.settings:flush()
+                    self:bildir(_("Hata günlüğü temizlendi."))
+                end,
+            },
+        },
+        help_text = _("1000Kitap'a gönderilemeyen işlemler ve bağlantı sorunları burada tarihiyle durur. Bir sorun olursa buradakini yazman yeterli."),
+        separator = true,
+    }
 end
 
 function BinKitap:bildir(metin, sure)
@@ -1246,7 +1342,11 @@ function BinKitap:ogeGonder(oge)
                 and (m.durum == Api.DURUM.okudum or m.durum == Api.DURUM.okuyorum) then
             return { atlandi = true } -- daha önce okunmuş kitabı açınca "Okudum"u bozma
         end
-        return Api:durumAyarla(oge.kitap_id, oge.durum)
+        local sonuc, err2, tur2 = Api:durumAyarla(oge.kitap_id, oge.durum)
+        -- Kendi değişikliğimizi "sitede değişmiş" sanıp KOReader'a geri yansıtmayalım
+        if sonuc and self.bkDurumKaydet then self:bkDurumKaydet(oge.kitap_id, oge.durum, true) end
+        if sonuc and oge.durum == Api.DURUM.okudum and self.hedefBildirimiPlanla then self:hedefBildirimiPlanla() end
+        return sonuc, err2, tur2
     elseif oge.tur == "ilerleme" or oge.tur == "seans" then
         local m, err, tur = Api:okumaDurumu(oge.kitap_id)
         if not m then return nil, err, tur end
@@ -1312,6 +1412,7 @@ function BinKitap:yavasGonder()
         ORTAK.gonderiliyor = false
         if not ok then
             logger.err("1000Kitap: arka plan gönderim hatası", sonuc)
+            BinKitap.hataKaydet("eklenti", oge.tur, tostring(sonuc))
             err, tur, sonuc = tostring(sonuc), "sunucu", nil
         end
         if not sonuc and tur == "ag" then
@@ -1346,6 +1447,54 @@ function BinKitap:yavasGonder()
         devam(ARKA_ARALIK)
     end
     devam(2)
+end
+
+--- Cihaz uykuya geçerken sıradaki birkaç işi hemen gönderir (en fazla 5 iş / 8 sn).
+-- Yalnızca başarılı olanlar sıradan çıkar; hata olursa durur, iş sırada kalır.
+local UYKU_EN_FAZLA, UYKU_SURESI = 5, 8
+function BinKitap:uykuOncesiGonder()
+    if not self.settings:nilOrTrue("uykuda_gonder") then return 0 end
+    if ORTAK.gonderiliyor or not Api:kimlikVar() or not NetworkMgr:isOnline() then return 0 end
+    local k = self:kuyruk()
+    if #k == 0 then return 0 end
+    local bas, gonderilen = os.time(), 0
+    ORTAK.gonderiliyor = true
+    while k[1] and gonderilen < UYKU_EN_FAZLA and os.time() - bas < UYKU_SURESI do
+        local oge = k[1]
+        local ok, sonuc = pcall(function() return self:ogeGonder(oge) end)
+        if not ok then
+            logger.err("1000Kitap: uyku öncesi gönderim hatası", sonuc)
+            BinKitap.hataKaydet("eklenti", oge.tur, tostring(sonuc))
+            sonuc = nil
+        end
+        if not sonuc then break end
+        table.remove(k, 1)
+        gonderilen = gonderilen + 1
+    end
+    ORTAK.gonderiliyor = false
+    if gonderilen > 0 then
+        self.settings:saveSetting("kuyruk", k)
+        self.settings:flush()
+    end
+    return gonderilen
+end
+
+--- Bekleyen işleri uygun yoldan sürdürür (çoksa arka planda, azsa sessizce).
+function BinKitap:bekleyenleriSurdur(gecikme)
+    local n = #self:kuyruk()
+    if n == 0 or not Api:kimlikVar() or not NetworkMgr:isOnline() then return end
+    if n > TOPLU_ESIK then
+        self:yavasGonder()
+    else
+        UIManager:scheduleIn(gecikme or 3, function()
+            if NetworkMgr:isOnline() then self:kuyruguGonder(true) end
+        end)
+    end
+end
+
+--- Elle ya da arka planda gönderim sürüyor mu?
+function BinKitap.gonderimSuruyor()
+    return ORTAK.gonderiliyor or ORTAK.arka_plan ~= nil
 end
 
 function BinKitap:arkaPlandaMi()
@@ -1442,6 +1591,7 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
         local ok, sonuc, err, tur = pcall(function() return self:ogeGonder(oge) end)
         if not ok then
             logger.err("1000Kitap: gönderim hatası", sonuc)
+            BinKitap.hataKaydet("eklenti", oge.tur, tostring(sonuc))
             err, tur, sonuc = tostring(sonuc), "sunucu", nil
         end
         if not sonuc and (tur == "ag" or tur == "yetki") then
@@ -1540,6 +1690,7 @@ function BinKitap:onReaderReady()
         end
         local function acilisIsleri(k)
             self:koDurumuKontrol()
+            if self.acilistaBkDurumu then self:acilistaBkDurumu(k) end
             if self.settings:nilOrTrue("acilista_okuyorum") and not k.okuyorum_islendi then
                 self:okuyorumSirala(k)
             end
@@ -1593,11 +1744,14 @@ end
 
 function BinKitap:onSuspend()
     if self.ui.document then self:araVer() end
+    self:uykuOncesiGonder()
 end
 
 function BinKitap:onResume()
     if self.ui.document then self:seansBaslat() end
     if self.uykuMesajiGuncelle then self:uykuMesajiGuncelle() end
+    -- Wi-Fi uyanınca açık kaldıysa bekleyenleri sürdür; kapalıysa onNetworkConnected halleder
+    UIManager:scheduleIn(5, function() self:bekleyenleriSurdur(1) end)
 end
 
 function BinKitap:onEndOfBook()
@@ -1613,12 +1767,7 @@ function BinKitap:onAnnotationsModified()
 end
 
 function BinKitap:onNetworkConnected()
-    local n = #self:kuyruk()
-    if n > TOPLU_ESIK and Api:kimlikVar() then
-        self:yavasGonder()
-    elseif n > 0 and Api:kimlikVar() then
-        UIManager:scheduleIn(3, function() self:kuyruguGonder(true) end)
-    end
+    self:bekleyenleriSurdur(3)
     if self.guncellemeKendiliginden then self:guncellemeKendiliginden() end
 end
 
@@ -1712,6 +1861,7 @@ end
 
 function BinKitap:ayarlarMenusu()
     local ogeler = {
+        self:hataGunluguMenusu(),
         { text = _("Hesap bilgileri"), keep_menu_open = true, callback = function() self:kimlikPenceresi() end },
         {
             text = _("Bağlantıyı test et"), keep_menu_open = true,
@@ -1734,6 +1884,18 @@ function BinKitap:ayarlarMenusu()
             checked_func = function() return self.settings:nilOrTrue("durum_senkron") end,
             callback = function() self.settings:flipNilOrTrue("durum_senkron"); self.settings:flush() end,
             help_text = _("KOReader'da kitap durumunu değiştirdiğinde 1000Kitap'a da yansır: Bitti → Okudum, Beklemede → Yarım bıraktım, Okunuyor → Okuyorum."),
+        },
+        {
+            text = _("1000Kitap'taki değişiklikleri KOReader'a yansıt"),
+            checked_func = function() return self.settings:nilOrTrue("durum_ters") end,
+            callback = function() self.settings:flipNilOrTrue("durum_ters"); self.settings:flush() end,
+            help_text = _("Bir kitabın durumunu 1000Kitap'ta (site ya da telefon) değiştirdiysen, kitabı Kobo'da açınca KOReader'daki durumu da değiştirmeyi önerir: Okudum → Bitti, Yarım bıraktım → Beklemede, Okuyorum → Okunuyor. Tüm kitaplar için menüdeki \"Durumları 1000Kitap'tan al\"ı kullan."),
+        },
+        {
+            text = _("\"Okudum\"dan sonra hedef ilerlemesini göster"),
+            checked_func = function() return self.settings:nilOrTrue("hedef_bildirimi") end,
+            callback = function() self.settings:flipNilOrTrue("hedef_bildirimi"); self.settings:flush() end,
+            help_text = _("Bir kitap 1000Kitap'ta \"Okudum\" olunca yıllık okuma hedefinde nerede olduğunu kısa bir bildirimle gösterir. Hedefin yoksa bir şey göstermez."),
         },
         {
             text = _("Otomatik durum değişikliklerinde onay iste"),
@@ -1796,6 +1958,12 @@ function BinKitap:ayarlarMenusu()
             checked_func = function() return self.settings:isTrue("otomatik_wifi") end,
             callback = function() self.settings:flipTrue("otomatik_wifi"); self.settings:flush() end,
             help_text = _("Kitabı kapatınca sırada bekleyen bir şey varsa Wi-Fi'yi açar, gönderir ve kapatır."),
+        },
+        {
+            text = _("Uykuya geçerken bekleyenleri gönder"),
+            checked_func = function() return self.settings:nilOrTrue("uykuda_gonder") end,
+            callback = function() self.settings:flipNilOrTrue("uykuda_gonder"); self.settings:flush() end,
+            help_text = _("Cihaz uykuya geçerken Wi-Fi açıksa sıradaki birkaç işi (en fazla 5, 8 saniye) hemen gönderir. Kalanlar uyanınca ya da Wi-Fi bağlanınca sürer."),
         },
     }
     if self.uykuMenuOgesi then
@@ -1907,6 +2075,13 @@ function BinKitap:menuOgeleri()
                 help_text = _("KOReader'da bitirdiğin kitapları bulur; seçtiklerini 1000Kitap'ta \"Okudum\" yapar, sonra vurgularını göndermek isteyip istemediğini sorar."),
             }
         end
+        if self.durumlariAl then
+            ogeler[#ogeler + 1] = {
+                text = _("Durumları 1000Kitap'tan al"),
+                callback = function() self:durumlariAl() end,
+                help_text = _("Eşleşmiş kitapların 1000Kitap'taki durumlarına yavaşça bakar, KOReader'dakinden farklı olanları listeler; seçtiklerini KOReader'da Bitti / Beklemede / Okunuyor yapar. KOReader'da durumu olan kitaplara ancak 1000Kitap'ta değiştiyse dokunmayı önerir."),
+            }
+        end
         ogeler[#ogeler + 1] = {
             text_func = function() return T(_("Emin olunamayanları gözden geçir (%1)"), self:belirsizSayisi()) end,
             enabled_func = function() return self:belirsizSayisi() > 0 end,
@@ -1951,5 +2126,6 @@ yukle("binkitap_kesif")(BinKitap)
 yukle("binkitap_guncelle")(BinKitap)
 yukle("binkitap_ileti")(BinKitap)
 yukle("binkitap_aktar")(BinKitap)
+yukle("binkitap_durum")(BinKitap)
 
 return BinKitap

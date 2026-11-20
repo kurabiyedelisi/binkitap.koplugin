@@ -211,6 +211,16 @@ function Api:istek(method, yol, sorgu, form, kimlik_gerekli, taban)
     return data
 end
 
+-- Başarısız her isteği eklentinin hata günlüğüne bildir (main.lua Api.gunluk'u kurar).
+do
+    local ham_istek = Api.istek
+    function Api:istek(method, yol, ...)
+        local data, err, tur = ham_istek(self, method, yol, ...)
+        if not data and self.gunluk then pcall(self.gunluk, tur, yol, err) end
+        return data, err, tur
+    end
+end
+
 local function bul(t, anahtar, derinlik)
     derinlik = derinlik or 0
     if type(t) ~= "table" or derinlik > 8 then return nil end
