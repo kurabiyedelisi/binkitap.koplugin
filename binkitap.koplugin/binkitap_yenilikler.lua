@@ -3,6 +3,12 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "0.4.2",
+        maddeler = {
+            "Kitap listelerine Romanlar ve Konulara göre eklendi: Edebiyat, Tarih, İslam, Siyaset, Aşk, Eğitim, Fantastik, Felsefe, Toplum, Kültür, Kişisel Gelişim, Bilim–Teknoloji, Sanat, Psikoloji, Macera–Aksiyon, Ekonomi, Sosyoloji, Bilimkurgu, Polisiye, Tasavvuf.",
+        },
+    },
+    {
         surum = "0.4.1",
         maddeler = {
             "Yeni: Kitap listeleri (Keşif menüsünde ve 1000Kitap ekranında \"Listeler\"). Sitenin Kitaplar sekmesindeki listeler: sana özel öneriler, son 7 günün en çok okunanları, son 6 ayda ve son 5 yılda çıkan en çok okunanlar, yeni çıkanlar, en çok okunanlar, en iyiler.",

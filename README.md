@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 0.4.1 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 0.4.2 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -149,7 +149,7 @@ Yazdığın metin taslak olarak saklanır: pencereyi kapatsan da, 1000Kitap ilet
 
 - **Kitap bilgisi:** 1000Kitap puanı, okunma ve alıntı sayıları, senin durumun, takip ettiklerinden okuyanlar.
 - **Popüler alıntılar:** Okuduğun kitabın en çok beğenilen alıntıları.
-- **Kitap listeleri:** Sitenin Kitaplar sekmesindeki listeler: Sana özel öneriler (okuduklarının dışında), Son 7 günün en çok okunanları, Son 6 ayda ve Son 5 yılda çıkan en çok okunanlar, Yeni çıkanlar, En çok okunanlar, En iyiler. Her kitabın puanı, 1000Kitap'taki durumun ve Kobo'nda olup olmadığı (✓) görünür; listenin sonunda **Daha fazla göster…** ile sonraki sayfa gelir. Kitaba dokununca **Kobo'da aç** ya da **Okuyacaklarıma ekle**. 1000Kitap ekranındaki **Listeler** düğmesi de buraya açılır.
+- **Kitap listeleri:** Sitenin Kitaplar sekmesindeki listeler: Sana özel öneriler (okuduklarının dışında), Son 7 günün en çok okunanları, Son 6 ayda ve Son 5 yılda çıkan en çok okunanlar, Yeni çıkanlar, En çok okunanlar, En iyiler, Romanlar ve **Konulara göre** (Edebiyat, Tarih, İslam, Siyaset, Aşk, Eğitim, Fantastik, Felsefe, Toplum, Kültür, Kişisel Gelişim, Bilim–Teknoloji–Mühendislik, Sanat, Psikoloji, Macera–Aksiyon, Ekonomi–Emek–İş dünyası, Sosyoloji, Bilimkurgu, Polisiye, Tasavvuf). Her kitabın puanı, 1000Kitap'taki durumun ve Kobo'nda olup olmadığı (✓) görünür; listenin sonunda **Daha fazla göster…** ile sonraki sayfa gelir. Kitaba dokununca **Kobo'da aç** ya da **Okuyacaklarıma ekle**. 1000Kitap ekranındaki **Listeler** düğmesi de buraya açılır.
 - **Popüler incelemeler:** Okuduğun kitabın en çok beğenilen incelemeleri; yazanın adı, verdiği puan, beğeni ve yorum sayısıyla. Uzun incelemelerin devamı için 1000Kitap bağlantısı yazar.
 - **1000Kitap puanı:** Arama sonuçlarında, baskı seçiminde, Okuyacaklarım ve Ne okusam? listelerinde, kitaplığında her kitabın yanında "★ 7,8" gibi görünür.
 - **Ne okusam?:** Okuyacaklarım listenden rastgele 10 kitap; Kobo'nda olanlar dokununca açılır.

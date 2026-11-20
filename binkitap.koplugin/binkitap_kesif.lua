@@ -332,8 +332,29 @@ return function(BinKitap)
         { ad = _("Yeni çıkanlar"), parametreler = { { "siralama", "yeni" } } },
         { ad = _("En çok okunanlar"), parametreler = { { "siralama", "okunan" } } },
         { ad = _("En iyiler"), parametreler = { { "siralama", "enIyi" } } },
+        { ad = _("Romanlar"), parametreler = { { "eserTuru", "roman" } } },
     }
     BinKitap.KESIF_LISTELERI = KESIF_LISTELERI
+
+    -- Sitenin Kitaplar sekmesindeki konular (ad, 1000Kitap konu kimliği)
+    local KONULAR = {
+        { "Edebiyat", 8 }, { "Tarih", 19 }, { "İslam", 56 }, { "Siyaset", 9 }, { "Aşk", 33 },
+        { "Eğitim", 4 }, { "Fantastik", 637 }, { "Felsefe", 24 }, { "Toplum", 674 }, { "Kültür", 292 },
+        { "Kişisel Gelişim", 233 }, { "Bilim–Teknoloji–Mühendislik", 43988 }, { "Sanat", 305 },
+        { "Psikoloji", 28 }, { "Macera–Aksiyon", 43991 }, { "Ekonomi–Emek–İş dünyası", 43983 },
+        { "Sosyoloji", 25 }, { "Bilimkurgu", 10279 }, { "Polisiye", 191 },
+        { "Tasavvuf–Mezhepler–Tarikatlar", 43995 },
+    }
+    BinKitap.KONULAR = KONULAR
+
+    function BinKitap:konuListeleriMenusu()
+        local ogeler = {}
+        for _i, k in ipairs(KONULAR) do
+            local l = { ad = T(_("%1 konulu kitaplar"), k[1]), parametreler = { { "konu", k[2] } } }
+            ogeler[#ogeler + 1] = { text = k[1], callback = function() self:kesifListesiAc(l) end }
+        end
+        return ogeler
+    end
 
     function BinKitap:kesifListeleriMenusu()
         local ogeler = {}
@@ -344,6 +365,11 @@ return function(BinKitap)
                 callback = function() self:kesifListesiAc(l) end,
             }
         end
+        ogeler[#ogeler].separator = true
+        ogeler[#ogeler + 1] = {
+            text = _("Konulara göre"),
+            sub_item_table_func = function() return self:konuListeleriMenusu() end,
+        }
         return ogeler
     end
 

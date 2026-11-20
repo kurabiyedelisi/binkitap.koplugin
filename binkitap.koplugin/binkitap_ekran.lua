@@ -229,13 +229,19 @@ return function(BinKitap)
         local buttons = {}
         for _i, o in ipairs(ogeler or {}) do
             local metin = o.text or (o.text_func and o.text_func())
-            if metin and o.callback then
+            local alt = o.sub_item_table or (o.sub_item_table_func and o.sub_item_table_func)
+            if metin and (o.callback or alt) then
                 buttons[#buttons + 1] = {{
-                    text = metin,
+                    text = alt and (metin .. " ›") or metin,
                     align = "left",
                     callback = function()
                         UIManager:close(dialog)
-                        o.callback()
+                        if alt then
+                            local liste = type(alt) == "function" and alt() or alt
+                            self:menudenDiyalog(metin, liste)
+                        else
+                            o.callback()
+                        end
                     end,
                 }}
             end
