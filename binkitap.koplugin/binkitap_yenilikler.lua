@@ -3,6 +3,13 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.2.0",
+        maddeler = {
+            "SimpleUI kullanıyorsan: 1000Kitap, Ne okusam?, Okuyacaklara ekle ve Kitap listeleri artık SimpleUI'nin Hızlı İşlemleri arasında. Gezinme çubuğuna sekme olarak, Ana ekrandaki Hızlı İşlemler modülüne ya da Hızlı Ayarlar çubuğuna ekleyebilirsin.",
+            "KOReader menüsünün ana sekmesinde (☰) doğrudan \"1000Kitap ekranı\" var.",
+        },
+    },
+    {
         surum = "1.1.0",
         maddeler = {
             "1000Kitap ekranından artık her şey yapılabiliyor: alttaki \"Menü\" eklentinin bütün özelliklerini ve ayarlarını açar. Alt menüden \"‹ Geri\" ile dönülür, açık/kapalı ayarlar ☑/☐ ile görünür.",

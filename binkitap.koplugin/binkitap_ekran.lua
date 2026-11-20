@@ -349,6 +349,60 @@ return function(BinKitap)
         end
     end
 
+    -------------------------------------------------------------------------
+    -- SimpleUI: Gezinme çubuğuna, Ana ekrandaki Hızlı İşlemler'e ve Hızlı Ayarlar
+    -- çubuğuna eklenebilen eylemler. SimpleUI yoksa ya da API'si değiştiyse sessizce atlanır.
+    -- (SimpleUI'nin dışarıya açık QA.register API'si: features/sui_quickactions.lua)
+    -------------------------------------------------------------------------
+
+    --- O an çalışan eklenti örneği (okuyucu açıksa onunki, değilse dosya tarayıcısınınki)
+    local function canliEklenti(ctx)
+        local RUI = package.loaded["apps/reader/readerui"]
+        if RUI and RUI.instance and RUI.instance.binkitap then return RUI.instance.binkitap end
+        local FM = package.loaded["apps/filemanager/filemanager"]
+        if FM and FM.instance and FM.instance.binkitap then return FM.instance.binkitap end
+        if type(ctx) == "table" and type(ctx.fm) == "table" and ctx.fm.binkitap then return ctx.fm.binkitap end
+    end
+
+    local SIMPLEUI_EYLEMLERI = {
+        { id = "binkitap_ekran", ad = _("1000Kitap"), yap = function(p) p:ekranAc() end },
+        { id = "binkitap_ne_okusam", ad = _("Ne okusam?"), yap = function(p) p:neOkusam() end },
+        { id = "binkitap_okuyacaklara_ekle", ad = _("Okuyacaklara ekle"), yap = function(p) p:okuyacaklaraEkle() end },
+        { id = "binkitap_kitap_listeleri", ad = _("Kitap listeleri"), yap = function(p)
+            p:menudenDiyalog(_("Kitap listeleri"), p:kesifListeleriMenusu())
+        end },
+    }
+    BinKitap.SIMPLEUI_EYLEMLERI = SIMPLEUI_EYLEMLERI
+
+    function BinKitap:simpleUIKaydet()
+        local QA = package.loaded["features/sui_quickactions"]
+        if not QA then
+            local ok, m = pcall(require, "features/sui_quickactions")
+            QA = ok and m or nil
+        end
+        if type(QA) ~= "table" or type(QA.register) ~= "function" then return false end
+        local simge = (BinKitap.DIZIN or "") .. "/1000kitap.svg"
+        for _i, e in ipairs(SIMPLEUI_EYLEMLERI) do
+            pcall(QA.register, {
+                id = e.id,
+                label = e.ad,
+                icon = simge,
+                is_in_place = true,
+                is_async_in_place = true,
+                execute = function(ctx)
+                    local p = canliEklenti(ctx)
+                    if not p then return end
+                    local ok, hata = pcall(e.yap, p)
+                    if not ok then
+                        logger.err("1000Kitap: SimpleUI eylemi", e.id, hata)
+                        BinKitap.hataKaydet("eklenti", "SimpleUI", tostring(hata))
+                    end
+                end,
+            })
+        end
+        return true
+    end
+
     function BinKitap:onBinKitapEkran()
         self:ekranAc()
         return true

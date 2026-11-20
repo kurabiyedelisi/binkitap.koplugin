@@ -112,6 +112,9 @@ function BinKitap:init()
     if self.dosyaMenusunuKaydet then self:dosyaMenusunuKaydet() end
     if not self.ui.document and self.ilkAktarimSor then self:ilkAktarimSor() end
     if self.yenilikKontrol then self:yenilikKontrol() end
+    -- SimpleUI kuruluysa eylemlerimizi onun Hızlı İşlemler listesine ekle. SimpleUI kendi
+    -- ayarlarını yüklemeden önce olmalı: eklentiler alfabetik sırayla başlar (binkitap < simpleui).
+    if self.simpleUIKaydet then pcall(self.simpleUIKaydet, self) end
     -- KOReader yeniden açıldıysa yarım kalan kalabalık sırayı sürdür
     if not ORTAK.arka_plan and Api:kimlikVar() and #self:kuyruk() > TOPLU_ESIK and NetworkMgr:isOnline() then
         UIManager:scheduleIn(10, function() self:yavasGonder() end)
@@ -1841,6 +1844,17 @@ function BinKitap:addToMainMenu(menu_items)
         sorting_hint = "tools",
         sub_item_table_func = function() return self:menuOgeleri() end,
     }
+    -- Kısayol: ana menü sekmesinde (☰) doğrudan 1000Kitap ekranı
+    if self.ekranAc then
+        menu_items.binkitap_ekran = {
+            text = _("1000Kitap ekranı"),
+            sorting_hint = "main",
+            callback = function(touchmenu_instance)
+                if touchmenu_instance and touchmenu_instance.closeMenu then touchmenu_instance:closeMenu() end
+                self:ekranAc()
+            end,
+        }
+    end
 end
 
 function BinKitap:secenekMenusu(anahtar, varsayilan, secenekler)

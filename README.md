@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.1.0 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.2.0 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -61,7 +61,11 @@ Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "gir
 
 ### 1000Kitap ekranı
 
-**Araçlar → 1000Kitap → 1000Kitap ekranı** (menünün en üstü). Hareket ayarlarında **1000Kitap: ekranı aç** eylemine bağlayabilirsin; SimpleUI kullanıyorsan da böyle açılır.
+Ekrana ulaşmanın en kolay yolları:
+
+- **SimpleUI kullanıyorsan:** SimpleUI ayarlarında Gezinme çubuğu (Navigation Bar) sekmelerinden birini ya da Ana ekrandaki Hızlı İşlemler (Quick Actions) modülünü düzenle, listeden **1000Kitap**'ı seç. Aynı listede **Ne okusam?**, **Okuyacaklara ekle** ve **Kitap listeleri** de var; Hızlı Ayarlar çubuğuna da eklenebilirler. Simgeyi ve adı SimpleUI'den değiştirebilirsin.
+- **KOReader menüsü:** ana sekmede (☰) **1000Kitap ekranı**; ya da **Araçlar → 1000Kitap → 1000Kitap ekranı**.
+- **Hareket:** KOReader'ın hareket ayarlarında bir köşeye dokunmayı ya da kaydırmayı **1000Kitap: ekranı aç** eylemine bağla.
 
 | Bölüm | Okurken | Dosya tarayıcısında |
 | --- | --- | --- |
