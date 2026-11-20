@@ -3,6 +3,13 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "0.4.1",
+        maddeler = {
+            "Yeni: Kitap listeleri (Keşif menüsünde ve 1000Kitap ekranında \"Listeler\"). Sitenin Kitaplar sekmesindeki listeler: sana özel öneriler, son 7 günün en çok okunanları, son 6 ayda ve son 5 yılda çıkan en çok okunanlar, yeni çıkanlar, en çok okunanlar, en iyiler.",
+            "Listelerde her kitabın puanı, 1000Kitap'taki durumun ve Kobo'nda olup olmadığı (✓) görünür. Dokununca Kobo'da açabilir ya da Okuyacaklarına ekleyebilirsin.",
+        },
+    },
+    {
         surum = "0.4.0",
         maddeler = {
             "Yeni: 1000Kitap ekranı (menünün en üstünde; hareket ayarlarında \"1000Kitap: ekranı aç\"). Okuduğun kitap, yıllık hedefin, Okuyacaklarım rafı, son alıntın ve bekleyen işler tek ekranda. Dosya tarayıcısında Devam et ve kütüphane kısayolları da var.",

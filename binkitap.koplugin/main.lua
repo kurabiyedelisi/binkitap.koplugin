@@ -2144,6 +2144,13 @@ function BinKitap:menuOgeleri()
     end
     if self.neOkusam then
         ogeler[#ogeler + 1] = { text = _("Ne okusam?"), callback = function() self:neOkusam() end }
+        if self.kesifListeleriMenusu then
+            ogeler[#ogeler + 1] = {
+                text = _("Kitap listeleri"),
+                help_text = _("Sitenin Kitaplar sekmesindeki listeler: sana özel öneriler, son 7 günün en çok okunanları, yeni çıkanlar, en iyiler… Kobo'nda olanlar ✓ ile işaretli; dokununca açabilir ya da Okuyacaklarına ekleyebilirsin."),
+                sub_item_table_func = function() return self:kesifListeleriMenusu() end,
+            }
+        end
         ogeler[#ogeler + 1] = {
             text = _("Okuyacaklarım koleksiyonunu güncelle"),
             callback = function() self:koleksiyonGuncelle() end,

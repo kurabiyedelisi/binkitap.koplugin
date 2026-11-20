@@ -21,6 +21,8 @@ Yazma
   GET  v2/kitaplar/kitapOku?id=&durum=1&forceEkle=1&okuyorTarihsaat=&okuduTarihsaat=&isTopluIslem=1
                                                          tarihli okuma (sitedeki "Toplu okuma ekle")
   GET  v2/kitaplar/kitapCek?id=&bolum=incelemeler&s=populer popüler incelemeler
+  GET  v2/kitaplar/kesifListe?siralama=sizeOzel&okuma=haric | donem=son7Gun | ilkYayinYili=son6Ay
+       | siralama=yeni|okunan|enIyi  &sayfa=&kume=&z=     Kitaplar sekmesindeki listeler
   GET  v2/kitaplar/kitapSayfaGuncelle?id=&okumaId=&sayfa=&sayfa2=   ilerleme
   GET  v2/kitaplar/kitapKutuphanemeEkle?id=&forceEkle=1   kitaplığa ekle (forceEkle=0: ekle/çıkar)
   POST v2/alintilar/alintiEkle                            alıntı
@@ -485,6 +487,41 @@ function Api:populerAlintilar(kitap_id)
         end
     end
     return liste
+end
+
+--- Sitenin Kitaplar sekmesindeki listeler (Size özel öneriler, Son 7 günün en çok okunanları…).
+-- parametreler: { {ad, değer}, ... }; sayfalama: önceki dönüşün ikinci değeri (ilk sayfa için nil).
+-- Dönüş: liste {id, adi, yazar, puan, okunma, ek, durum}, sonraki_sayfalama (bitti ise nil)
+function Api:kesifListe(parametreler, sayfalama)
+    local q = {}
+    for _i, p in ipairs(parametreler or {}) do q[#q + 1] = { p[1], p[2] } end
+    sayfalama = sayfalama or { sayfa = 1, kume = -1, z = 0 }
+    q[#q + 1] = { "sayfa", sayfalama.sayfa }
+    q[#q + 1] = { "kume", sayfalama.kume }
+    q[#q + 1] = { "z", sayfalama.z }
+    local data, err, tur = self:istek("GET", "kitaplar/kesifListe", q, nil, true)
+    if not data then return nil, err, tur end
+    local s = data._sonuc or {}
+    local liste = {}
+    for _i, k in ipairs(type(s.liste) == "table" and s.liste or {}) do
+        if type(k) == "table" and k.id and k.adi and k.renderTuru ~= "reklam" and k.turu ~= "reklam" then
+            local db = type(k.okumaDurumuButon) == "table" and k.okumaDurumuButon or {}
+            liste[#liste + 1] = {
+                id = yazi(k.id),
+                adi = yazi(k.adi),
+                yazar = yazi(k.yazarAdi or k.ilkYazar),
+                puan = puanOku(k.puan),
+                okunma = tonumber(k.okuduDuz),
+                ek = k.ekBilgi and yazi(k.ekBilgi) or nil,
+                durum = tonumber(db.okumaDurumu),
+            }
+        end
+    end
+    local sonraki
+    if s.hasMore and s.hasMore ~= 0 and s.hasMore ~= "0" then
+        sonraki = { sayfa = (tonumber(s.sayfa) or sayfalama.sayfa) + 1, kume = s.kume or -1, z = s.z or 0 }
+    end
+    return liste, sonraki, s.baslik and yazi(s.baslik) or nil
 end
 
 --- Bir kitabın popüler incelemeleri.

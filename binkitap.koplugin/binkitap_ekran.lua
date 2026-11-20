@@ -600,6 +600,9 @@ return function(BinKitap)
             return dugmeler({{
                 { text = _("Ne okusam?"), callback = kapat_ve(function() self:neOkusam() end) },
                 { text = T(_("Tümü (%1)"), o and o.toplam or 0), callback = function() self:okuyacaklarTumu(o) end },
+                { text = _("Listeler"), callback = function()
+                    self:menudenDiyalog(_("Kitap listeleri"), self:kesifListeleriMenusu())
+                end },
             }})
         end
         if o and #o.raf > 0 then

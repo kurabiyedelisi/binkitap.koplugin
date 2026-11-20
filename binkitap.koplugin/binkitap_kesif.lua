@@ -320,6 +320,143 @@ return function(BinKitap)
     end
 
     -------------------------------------------------------------------------
+    -- Kitap listeleri (sitenin Kitaplar sekmesi)
+    -------------------------------------------------------------------------
+
+    local KESIF_LISTELERI = {
+        { ad = _("Sana özel öneriler"), aciklama = _("Okuma zevkine göre; okuduklarının dışında"),
+          parametreler = { { "siralama", "sizeOzel" }, { "okuma", "haric" } } },
+        { ad = _("Son 7 günün en çok okunanları"), parametreler = { { "donem", "son7Gun" }, { "siralama", "okunan" } } },
+        { ad = _("Son 6 ayda çıkan en çok okunanlar"), parametreler = { { "ilkYayinYili", "son6Ay" }, { "siralama", "okunan" } } },
+        { ad = _("Son 5 yılda çıkan en çok okunanlar"), parametreler = { { "ilkYayinYili", "son5Yil" }, { "siralama", "okunan" } } },
+        { ad = _("Yeni çıkanlar"), parametreler = { { "siralama", "yeni" } } },
+        { ad = _("En çok okunanlar"), parametreler = { { "siralama", "okunan" } } },
+        { ad = _("En iyiler"), parametreler = { { "siralama", "enIyi" } } },
+    }
+    BinKitap.KESIF_LISTELERI = KESIF_LISTELERI
+
+    function BinKitap:kesifListeleriMenusu()
+        local ogeler = {}
+        for _i, l in ipairs(KESIF_LISTELERI) do
+            ogeler[#ogeler + 1] = {
+                text = l.ad,
+                help_text = l.aciklama,
+                callback = function() self:kesifListesiAc(l) end,
+            }
+        end
+        return ogeler
+    end
+
+    --- Kobo'da olanları bulmak için: eşleşmeler + bilinen dosyalar (kütüphane taranmaz)
+    local function cihazdaBulucu(self)
+        local id_yol = {}
+        for yol, k in pairs(self.settings:readSetting("eslesmeler") or {}) do
+            if type(k) == "table" and k.id then id_yol[tostring(k.id)] = id_yol[tostring(k.id)] or yol end
+        end
+        for id, yol in pairs(self.settings:readSetting("kitap_dosyalari") or {}) do
+            id_yol[tostring(id)] = id_yol[tostring(id)] or yol
+        end
+        local okl, lfs = pcall(require, "libs/libkoreader-lfs")
+        return function(id)
+            local yol = id_yol[tostring(id)]
+            if yol and (not okl or lfs.attributes(yol, "mode") == "file") then return yol end
+        end
+    end
+
+    function BinKitap:kesifListesiAc(l)
+        if not Api:kimlikVar() then return self:kimlikUyarisi() end
+        NetworkMgr:runWhenOnline(function()
+            local bekle = self:bekle(T(_("%1 getiriliyor…"), l.ad))
+            local liste, sonraki = Api:kesifListe(l.parametreler)
+            UIManager:close(bekle)
+            if not liste then return self:hataGoster(sonraki) end
+            if #liste == 0 then return self:bildir(T(_("%1: liste boş."), l.ad)) end
+            self:kesifListesiGoster(l, liste, sonraki)
+        end)
+    end
+
+    function BinKitap:kesifListesiGoster(l, liste, sonraki)
+        local Menu = require("ui/widget/menu")
+        local bul = cihazdaBulucu(self)
+        local menu
+        local function itemler()
+            local t = {}
+            for i, k in ipairs(liste) do
+                local yol = bul(k.id)
+                local metin = T("%1. ", i) .. (yol and "✓ " or "") .. k.adi .. ((k.yazar or "") ~= "" and (" — " .. k.yazar) or "")
+                if k.durum and k.durum >= 0 and Api.DURUM_ADI[k.durum] then metin = metin .. " · " .. Api.DURUM_ADI[k.durum] end
+                t[#t + 1] = { text = metin, mandatory = BinKitap.puanYazi(k.puan), kitap = k, yol = yol }
+            end
+            if sonraki then t[#t + 1] = { text = _("Daha fazla göster…"), daha = true } end
+            return t
+        end
+        menu = Menu:new{
+            title = l.ad,
+            item_table = itemler(),
+            covers_fullscreen = true,
+            is_borderless = true,
+            is_popout = false,
+            onMenuSelect = function(m, item)
+                if item.daha then
+                    NetworkMgr:runWhenOnline(function()
+                        local bekle = self:bekle(_("Getiriliyor…"))
+                        local ek, yeni_sonraki = Api:kesifListe(l.parametreler, sonraki)
+                        UIManager:close(bekle)
+                        if not ek then return self:hataGoster(yeni_sonraki) end
+                        for _i, k in ipairs(ek) do liste[#liste + 1] = k end
+                        sonraki = yeni_sonraki
+                        m:switchItemTable(l.ad, itemler(), #liste - #ek + 1)
+                    end)
+                    return true
+                end
+                self:kesifKitapKarti(item.kitap, item.yol, function() UIManager:close(m) end)
+                return true
+            end,
+            close_callback = function() UIManager:close(menu) end,
+        }
+        UIManager:show(menu)
+    end
+
+    --- Listedeki bir kitap: bilgiler + Okuyacaklarıma ekle / Kobo'da aç
+    function BinKitap:kesifKitapKarti(k, yol, listeyi_kapat)
+        local ButtonDialog = require("ui/widget/buttondialog")
+        local satirlar = { k.adi }
+        if (k.yazar or "") ~= "" then satirlar[#satirlar + 1] = k.yazar end
+        local bilgi = {}
+        local p = BinKitap.puanYazi(k.puan)
+        if p then bilgi[#bilgi + 1] = p end
+        if k.okunma then bilgi[#bilgi + 1] = T(_("%1 okunma"), k.okunma) end
+        if #bilgi > 0 then satirlar[#satirlar + 1] = table.concat(bilgi, " · ") end
+        if k.ek then satirlar[#satirlar + 1] = k.ek end
+        if k.durum and k.durum >= 0 and Api.DURUM_ADI[k.durum] then
+            satirlar[#satirlar + 1] = T(_("1000Kitap'ta: %1"), Api.DURUM_ADI[k.durum])
+        end
+        satirlar[#satirlar + 1] = yol and _("✓ Kobo'nda var") or _("Kobo'nda yok")
+        local dialog
+        local dugmeler = {}
+        if yol then
+            dugmeler[#dugmeler + 1] = {{ text = _("Kobo'da aç"), callback = function()
+                UIManager:close(dialog)
+                if listeyi_kapat then listeyi_kapat() end
+                self:kitapAc(yol)
+            end }}
+        end
+        if not k.durum or k.durum < 0 then
+            dugmeler[#dugmeler + 1] = {{ text = _("Okuyacaklarıma ekle"), callback = function()
+                UIManager:close(dialog)
+                self:siraya({ tur = "durum", kitap_id = k.id, kitap_adi = k.adi,
+                    durum = Api.DURUM.okuyacagim, sadece_bossa = true })
+                k.durum = Api.DURUM.okuyacagim
+                self:bildir(T(_("“%1” Okuyacaklarına eklenecek."), k.adi), 2)
+                NetworkMgr:runWhenOnline(function() self:kuyruguGonder(true) end)
+            end }}
+        end
+        dugmeler[#dugmeler + 1] = {{ text = _("Kapat"), callback = function() UIManager:close(dialog) end }}
+        dialog = ButtonDialog:new{ title = table.concat(satirlar, "\n"), title_align = "left", buttons = dugmeler }
+        UIManager:show(dialog)
+    end
+
+    -------------------------------------------------------------------------
     -- Okuma hedefi
     -------------------------------------------------------------------------
 
