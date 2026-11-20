@@ -135,6 +135,10 @@ function BinKitap:onDispatcherRegisterActions()
         category = "none", event = "BinKitapNeOkusam",
         title = _("1000Kitap: ne okusam?"), general = true,
     })
+    Dispatcher:registerAction("binkitap_ekran", {
+        category = "none", event = "BinKitapEkran",
+        title = _("1000Kitap: ekranı aç"), general = true,
+    })
 end
 
 ---------------------------------------------------------------------------
@@ -512,6 +516,13 @@ function BinKitap:yayineviEkle(sonuclar, en_fazla)
     end
 end
 
+--- 1000Kitap genel puanı, kısa: "★ 7,8"
+function BinKitap.puanYazi(puan)
+    puan = Api.puanOku(puan)
+    if not puan then return nil end
+    return "★ " .. (string.format("%.1f", puan):gsub("%.", ","))
+end
+
 function BinKitap.kitapEtiketi(s)
     local etiket = s.adi
     if s.yazar and s.yazar ~= "" then etiket = etiket .. " — " .. s.yazar end
@@ -519,6 +530,8 @@ function BinKitap.kitapEtiketi(s)
     if s.yayinevi and s.yayinevi ~= "" then ek[#ek + 1] = s.yayinevi end
     if s.yil and s.yil ~= "" and s.yil ~= "0" then ek[#ek + 1] = s.yil end
     if #ek > 0 then etiket = etiket .. " · " .. table.concat(ek, ", ") end
+    local p = BinKitap.puanYazi(s.puan)
+    if p then etiket = etiket .. " · " .. p end
     return etiket
 end
 
@@ -1287,12 +1300,16 @@ end
 --- Tek bir sıra öğesini gönderir. Dönüş: sonuç | nil, hata, tür
 function BinKitap:ogeGonder(oge)
     if oge.tur == "alinti" then
-        return Api:alintiEkle(oge.kitap_id, oge.soz, oge.sayfa, oge.ekbilgi, {
+        local sonuc, err, tur = Api:alintiEkle(oge.kitap_id, oge.soz, oge.sayfa, oge.ekbilgi, {
             ilerlemeyi_guncelle = self.settings:isTrue("ilerleme_guncelle"),
             konu_id = oge.konu_id, yorum_ayari = oge.yorum_ayari,
         })
+        if sonuc and self.sonAlintiKaydet then self:sonAlintiKaydet(oge) end
+        return sonuc, err, tur
     elseif oge.tur == "ozel_not" then
-        return Api:ozelNotEkle(oge.kitap_id, oge.metin, oge.anahtar)
+        local sonuc, err, tur = Api:ozelNotEkle(oge.kitap_id, oge.metin, oge.anahtar)
+        if sonuc and self.sonAlintiKaydet then self:sonAlintiKaydet(oge) end
+        return sonuc, err, tur
     elseif oge.tur == "ileti" then
         return Api:iletiEkle(oge.metin, {
             baslik = oge.baslik, konu_id = oge.konu_id, konu_adi = oge.konu_adi, yorum_ayari = oge.yorum_ayari,
@@ -1342,10 +1359,17 @@ function BinKitap:ogeGonder(oge)
                 and (m.durum == Api.DURUM.okudum or m.durum == Api.DURUM.okuyorum) then
             return { atlandi = true } -- daha önce okunmuş kitabı açınca "Okudum"u bozma
         end
-        local sonuc, err2, tur2 = Api:durumAyarla(oge.kitap_id, oge.durum)
+        -- Tarihli okuma yalnızca kitapta açık bir okuma yokken: yoksa ikinci bir okuma kaydı açılır
+        local tarih
+        if oge.tarih_bas and oge.tarih_bit and oge.durum == Api.DURUM.okudum
+                and (m.durum == Api.DURUM.yok or m.durum == Api.DURUM.okuyacagim) then
+            tarih = { bas = oge.tarih_bas, bit = oge.tarih_bit }
+        end
+        local sonuc, err2, tur2 = Api:durumAyarla(oge.kitap_id, oge.durum, tarih)
         -- Kendi değişikliğimizi "sitede değişmiş" sanıp KOReader'a geri yansıtmayalım
         if sonuc and self.bkDurumKaydet then self:bkDurumKaydet(oge.kitap_id, oge.durum, true) end
-        if sonuc and oge.durum == Api.DURUM.okudum and self.hedefBildirimiPlanla then self:hedefBildirimiPlanla() end
+        -- Bildirim planlanamazsa bile gönderim başarılıdır
+        if sonuc and oge.durum == Api.DURUM.okudum and self.hedefBildirimiPlanla then pcall(self.hedefBildirimiPlanla, self) end
         return sonuc, err2, tur2
     elseif oge.tur == "ilerleme" or oge.tur == "seans" then
         local m, err, tur = Api:okumaDurumu(oge.kitap_id)
@@ -1960,6 +1984,12 @@ function BinKitap:ayarlarMenusu()
             help_text = _("Kitabı kapatınca sırada bekleyen bir şey varsa Wi-Fi'yi açar, gönderir ve kapatır."),
         },
         {
+            text = _("Okuduklarımı aktarırken okuma tarihlerini de gönder"),
+            checked_func = function() return self.settings:nilOrTrue("aktar_tarihli") end,
+            callback = function() self.settings:flipNilOrTrue("aktar_tarihli"); self.settings:flush() end,
+            help_text = _("Okuduklarımı aktar, kitapları KOReader'daki okuma tarihleriyle (istatistiklerden ilk ve son okuma; yoksa Bitti işaretlediğin gün) \"Okudum\" yapar. Kapalıysa bugünün tarihiyle kaydedilir ve hepsi bu yılın hedefine sayılır."),
+        },
+        {
             text = _("Uykuya geçerken bekleyenleri gönder"),
             checked_func = function() return self.settings:nilOrTrue("uykuda_gonder") end,
             callback = function() self.settings:flipNilOrTrue("uykuda_gonder"); self.settings:flush() end,
@@ -2009,6 +2039,17 @@ end
 
 function BinKitap:menuOgeleri()
     local ogeler = {}
+    if self.ekranAc then
+        ogeler[#ogeler + 1] = {
+            text = _("1000Kitap ekranı"),
+            callback = function(touchmenu_instance)
+                if touchmenu_instance and touchmenu_instance.closeMenu then touchmenu_instance:closeMenu() end
+                self:ekranAc()
+            end,
+            help_text = _("Okuduğun kitap, yıllık hedefin, Okuyacaklarım rafı, son alıntın ve bekleyen işler tek ekranda. Hareket ayarlarından \"1000Kitap: ekranı aç\" eylemine de bağlayabilirsin."),
+            separator = true,
+        }
+    end
     if self.ui.document then
         ogeler[#ogeler + 1] = {
             text_func = function()
@@ -2051,6 +2092,9 @@ function BinKitap:menuOgeleri()
             ogeler[#ogeler + 1] = { text = _("Kitap bilgisi"), callback = function() self:kitapKarti() end }
             ogeler[#ogeler + 1] = {
                 text = _("Popüler alıntılar"), callback = function() self:populerAlintilar() end,
+            }
+            ogeler[#ogeler + 1] = {
+                text = _("Popüler incelemeler"), callback = function() self:populerIncelemeler() end,
                 separator = true,
             }
         end
@@ -2127,5 +2171,6 @@ yukle("binkitap_guncelle")(BinKitap)
 yukle("binkitap_ileti")(BinKitap)
 yukle("binkitap_aktar")(BinKitap)
 yukle("binkitap_durum")(BinKitap)
+yukle("binkitap_ekran")(BinKitap)
 
 return BinKitap

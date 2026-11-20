@@ -4,20 +4,21 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 0.3.0 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 0.4.0 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
+- **Tek bakışta 1000Kitap ekranı.** Okuduğun kitap, yıllık hedefin, Okuyacaklarım rafı (kapaklarla), son alıntın ve bekleyen işler tek ekranda.
 - **Kitabını tanır.** ISBN'den ya da Calibre'de eklediğin `1000kitap:<id>` etiketinden doğru baskıyı sormadan bulur. Bulamazsa yayınevleriyle birlikte seçenek sunar.
 - **Alıntılarını gönderir.** Metni seç, "1000Kitap'a gönder"e dokun. Sayfa numarası basılı baskıya göre hesaplanır. İstersen gizli paylaşırsın; o zaman yalnızca sen görürsün.
 - **Renge göre kendiliğinden gönderir.** Örneğin sarı vurgular herkese açık alıntı, mavi vurgular gizli alıntı olarak gider.
 - **İleti yazdırır.** Alıntı olmayan kendi yazını 1000Kitap'ta ileti olarak paylaşabilirsin, okuduğun kitabı etiketleyerek.
-- **Geçmişini aktarır.** KOReader'da daha önce bitirdiğin kitapları bulup 1000Kitap'ta "Okudum" yapar, istersen o kitaplardaki vurguları da gönderir.
+- **Geçmişini aktarır.** KOReader'da daha önce bitirdiğin kitapları okuma tarihleriyle 1000Kitap'ta "Okudum" yapar, istersen o kitaplardaki vurguları da gönderir.
 - **Okuma durumunu iki yönlü takip eder.** Kitabı açınca "Okuyorum" yapar. Kitap bitince tek ekranda "Okudum", puan ve kısa inceleme alır. 1000Kitap'ta değiştirdiğin durum da KOReader'a yansıyabilir.
 - **Bütün kütüphaneni eşleştirir.** Kobo'daki kitapları 1000Kitap'taki karşılıklarıyla eşleştirir, emin olamadıklarını sana sorar.
 - **1000Kitap kitaplığını yönetir.** Kobo'daki kitapları kitaplığına seçerek ekler, seçtiklerini çıkarır.
 - **Okuyacaklar listeni doldurur.** Kobo'daki kitaplarından seçerek ya da 1000Kitap'ta arayarak "Okuyacağım" listene ekler.
-- **Keşfetmene yardım eder.** Ne okusam?, Okuyacaklarım koleksiyonu, popüler alıntılar, okuma hedefi var. "Okudum"dan sonra hedefinde nerede olduğunu söyler. Uyku ekranında kendi alıntılarından birini ve hedef ilerlemeni gösterebilir.
+- **Keşfetmene yardım eder.** Ne okusam?, Okuyacaklarım koleksiyonu, popüler alıntılar ve incelemeler, okuma hedefi var. Listelerde her kitabın 1000Kitap puanı görünür. "Okudum"dan sonra hedefinde nerede olduğunu söyler. Uyku ekranında kendi alıntılarından birini ve hedef ilerlemeni gösterebilir.
 - **İnternet olmadan da çalışır.** Wi-Fi kapalıyken yaptıkların sıraya girer, bağlanınca gönderilir.
 - **Kendini günceller.** Yeni sürüm çıktığında neler değiştiğiyle birlikte sorar, onay verirsen kurar.
 
@@ -58,6 +59,21 @@ Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "gir
 
 ## Kullanım
 
+### 1000Kitap ekranı
+
+**Araçlar → 1000Kitap → 1000Kitap ekranı** (menünün en üstü). Hareket ayarlarında **1000Kitap: ekranı aç** eylemine bağlayabilirsin; SimpleUI kullanıyorsan da böyle açılır.
+
+| Bölüm | Okurken | Dosya tarayıcısında |
+| --- | --- | --- |
+| Kitap | Şu an okuduğun: kapak, durum, sayfa, yüzde, 1000Kitap puanı; **Vurgular**, **İleti yaz**, **Puan ver**, **Bitirdim** | Son okuduğun; **Devam et** |
+| Hedef | Bu yılın hedefi, kaç kitap kaldığı | Aynı |
+| Okuyacaklarım | 4 kitaplık raf (Kobo'nda olanlar önce, kapaklarıyla); dokununca açılır. **Ne okusam?**, **Tümü** | Aynı |
+| Son alıntın | Gönderdiğin son alıntı | Aynı |
+| Kütüphane | — | Okuyacaklarıma ekle, Okuduklarımı aktar, Kütüphaneyi eşleştir, 1000Kitap kitaplığım |
+| Alt satır | Bekleyen işler (dokununca gönderir), seçim bekleyen kitaplar ya da hata günlüğü, **Yenile** | Aynı |
+
+Ekran hafızadaki bilgilerle hemen açılır, kendi başına internete çıkmaz; yalnızca hedef bilgisi eskiyse ve Wi-Fi açıksa onu tazeler. **Yenile** hedefi ve Okuyacaklar listesini yeniden getirir. Ekran sığmazsa önce son alıntı, sonra raf kapakları gizlenir. Kapatmak için sağ üstteki çarpıya dokun ya da aşağı kaydır.
+
 ### Eşleştirme
 
 | Nerede | Ne yapar |
@@ -85,6 +101,8 @@ Tarayıcıda 1000Kitap'tan çıkış yaparsan bu oturum kapanır ve eklenti "gir
 ### Okuduklarını aktar
 
 **Araçlar → 1000Kitap → Okuduklarımı aktar.** Eklentiyi kurup hesabını bağladığında bir kez kendiliğinden de sorar.
+
+Kitaplar okuma tarihleriyle kaydedilir: başlangıç ve bitiş KOReader'ın okuma istatistiklerinden alınır; istatistik yoksa KOReader'da "Bitti" işaretlediğin gün kullanılır. Böylece geçmiş yıllarda okuduğun kitaplar bu yılın hedefine sayılmaz. Listede her kitabın yanında bitiş tarihi görünür. 1000Kitap'ta zaten açık bir okuması olan kitap (Okuyorum ya da Yarım bıraktım) tarihsiz "Okudum" yapılır ki ikinci bir okuma kaydı açılmasın. Tarih göndermek istemezsen: **Ayarlar → Okuduklarımı aktarırken okuma tarihlerini de gönder.**
 
 1. KOReader'da "Bitti" olarak işaretlenmiş kitapların bulunur. Kitaplar açılmaz, bilgiler KOReader'ın kendi kayıtlarından okunur.
 2. Liste açılır: "Bitti" olanlar seçili gelir. Sonuna kadar okunmuş ama "Bitti" işaretlenmemiş olanlar da listede durur, ama seçili gelmez. Yarım bıraktıkların listede çıkmaz.
@@ -131,6 +149,8 @@ Yazdığın metin taslak olarak saklanır: pencereyi kapatsan da, 1000Kitap ilet
 
 - **Kitap bilgisi:** 1000Kitap puanı, okunma ve alıntı sayıları, senin durumun, takip ettiklerinden okuyanlar.
 - **Popüler alıntılar:** Okuduğun kitabın en çok beğenilen alıntıları.
+- **Popüler incelemeler:** Okuduğun kitabın en çok beğenilen incelemeleri; yazanın adı, verdiği puan, beğeni ve yorum sayısıyla. Uzun incelemelerin devamı için 1000Kitap bağlantısı yazar.
+- **1000Kitap puanı:** Arama sonuçlarında, baskı seçiminde, Okuyacaklarım ve Ne okusam? listelerinde, kitaplığında her kitabın yanında "★ 7,8" gibi görünür.
 - **Ne okusam?:** Okuyacaklarım listenden rastgele 10 kitap; Kobo'nda olanlar dokununca açılır.
 - **Okuyacaklarım koleksiyonu:** Listedeki ve Kobo'nda bulunan kitapları "1000Kitap – Okuyacaklarım" koleksiyonunda toplar.
 - **Okuma hedefi:** Bu yılın hedefini gösterir ya da belirlersin. Bir kitap "Okudum" olunca kısa bir bildirimle hedefinde nerede olduğunu söyler ("50 kitaptan 23'ü; 27 kitap kaldı, yıl sonuna 6 hafta var"). Kapatmak için: **Ayarlar → "Okudum"dan sonra hedef ilerlemesini göster.**
@@ -143,7 +163,7 @@ Yazdığın metin taslak olarak saklanır: pencereyi kapatsan da, 1000Kitap ilet
 - **Bekleyen gönderiler** menüde kaç iş kaldığını ve arka planda gönderim sürüyorsa bunu gösterir. Dokununca beklemeden hepsini hemen gönderir, basılı tutunca sırayı temizler.
 - **Uykuya geçerken gönderim:** Cihaz uykuya geçerken Wi-Fi açıksa sıradaki birkaç iş (en fazla 5, en fazla 8 saniye) hemen gönderilir. Kalanlar cihaz uyanınca ya da Wi-Fi bağlanınca sürer. **Ayarlar → Uykuya geçerken bekleyenleri gönder** ile kapatılabilir.
 - **İhtiyaç anında Wi-Fi** açıksa kitabı kapattığında Wi-Fi'yi açar, gönderir, kapatır.
-- KOReader'ın hareket ayarlarında dört eylem var: **1000Kitap: bekleyenleri gönder**, **1000Kitap: Okuyacaklarıma ekle**, **1000Kitap: ileti yaz**, **1000Kitap: ne okusam?**
+- KOReader'ın hareket ayarlarında beş eylem var: **1000Kitap: ekranı aç**, **1000Kitap: bekleyenleri gönder**, **1000Kitap: Okuyacaklarıma ekle**, **1000Kitap: ileti yaz**, **1000Kitap: ne okusam?**
 
 ## Güncelleme
 

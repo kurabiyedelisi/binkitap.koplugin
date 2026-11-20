@@ -38,6 +38,64 @@ return function(BinKitap)
         if ok3 then return ds end
     end
 
+    ---------------------------------------------------------------------------
+    -- Okuma tarihleri: KOReader istatistiklerinden (ilk ve son okuma anı), yoksa
+    -- yan dosyadaki "Bitti" işaretleme gününden. 1000Kitap'a tarihli okuma olarak gider,
+    -- böylece eski kitaplar bu yılın hedefine sayılmaz.
+    ---------------------------------------------------------------------------
+
+    --- İstatistik veritabanını bir kez açar; sorgu(md5) → ilk, son (ya da nil). Bitince kapat().
+    local function istatistikAc()
+        local okd, DataStorage = pcall(require, "datastorage")
+        local oks, SQ3 = pcall(require, "lua-ljsqlite3/init")
+        if not okd or not oks or type(SQ3) ~= "table" or not SQ3.open then return nil end
+        local yol = DataStorage:getSettingsDir() .. "/statistics.sqlite3"
+        local okl, lfs = pcall(require, "libs/libkoreader-lfs")
+        if okl and lfs.attributes(yol, "mode") ~= "file" then return nil end
+        local ok, conn = pcall(SQ3.open, yol)
+        if not ok or not conn then return nil end
+        local ok2, stmt = pcall(function()
+            return conn:prepare("SELECT min(p.start_time), max(p.start_time + p.duration) FROM page_stat_data p JOIN book b ON b.id = p.id_book WHERE b.md5 = ?;")
+        end)
+        if not ok2 or not stmt then pcall(function() conn:close() end); return nil end
+        return {
+            sorgu = function(md5)
+                if type(md5) ~= "string" or md5 == "" then return nil end
+                local okq, ilk, son = pcall(function()
+                    local satir = stmt:reset():bind(md5):step()
+                    if satir then return tonumber(satir[1]), tonumber(satir[2]) end
+                end)
+                if okq then return ilk, son end
+            end,
+            kapat = function()
+                pcall(function() stmt:close() end)
+                pcall(function() conn:close() end)
+            end,
+        }
+    end
+
+    --- Bir kitabın okuma tarihleri: { bas = zaman, bit = zaman, kaynak = "istatistik"|"bitti" } ya da nil
+    local function okumaTarihleri(ds, ist)
+        local simdi = os.time()
+        local bit_isaret
+        local ozet = ds:readSetting("summary")
+        local gun = type(ozet) == "table" and type(ozet.modified) == "string" and ozet.modified
+        if gun then
+            local y, a, g = gun:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)")
+            if y then bit_isaret = os.time{ year = tonumber(y), month = tonumber(a), day = tonumber(g), hour = 12 } end
+        end
+        local ilk, son
+        if ist then ilk, son = ist.sorgu(ds:readSetting("partial_md5_checksum")) end
+        local kaynak = son and "istatistik" or "bitti"
+        local bit = son or bit_isaret
+        if not bit then return nil end
+        local bas = ilk or bit
+        local min_zaman = os.time{ year = 2000, month = 1, day = 1, hour = 0 }
+        if bit > simdi + 86400 or bit < min_zaman or bas > bit or bas < min_zaman then return nil end
+        return { bas = bas, bit = bit, kaynak = kaynak }
+    end
+    BinKitap._okumaTarihleri = okumaTarihleri
+
     --- Yan dosyadaki vurgular (yeni "annotations" ya da eski "highlight" biçimi).
     local function vurgular(ds)
         local liste = {}
@@ -83,6 +141,7 @@ return function(BinKitap)
         local dosyalar = Y.kitapDosyalari(BinKitap.evDizini(), true, 5000)
         UIManager:close(bekle)
         local bulunan, i, iptal = {}, 0, false
+        local ist = self.settings:nilOrTrue("aktar_tarihli") and istatistikAc() or nil
         local kutu, kapatiyorum
         local function goster()
             if kutu then kapatiyorum = true; UIManager:close(kutu); kapatiyorum = false end
@@ -102,6 +161,7 @@ return function(BinKitap)
         end
         local function kapat()
             if kutu then kapatiyorum = true; UIManager:close(kutu); kutu = nil; kapatiyorum = false end
+            if ist then ist.kapat(); ist = nil end
         end
         local adim
         adim = function()
@@ -123,6 +183,7 @@ return function(BinKitap)
                             baslik = baslik ~= "" and baslik or Y.dosyaAdindanBaslik(yol),
                             kesin = durum == "complete",
                             vurgu = #gonderilmemis(self, ds),
+                            tarih = self.settings:nilOrTrue("aktar_tarihli") and okumaTarihleri(ds, ist) or nil,
                         }
                     end
                 end
@@ -143,15 +204,22 @@ return function(BinKitap)
                 return self:bildir(_("KOReader'da bitirdiğin kitap bulunamadı. (Kitabı bitirince KOReader'da \"Bitti\" olarak işaretlenmiş olmalı.)"), 5)
             end
             table.sort(bulunan, function(x, y) return Y.normal(x.baslik) < Y.normal(y.baslik) end)
-            local ogeler, kesin = {}, 0
+            local ogeler, kesin, tarihler = {}, 0, {}
             for _i, b in ipairs(bulunan) do
                 local ek = b.kesin and _("bitti") or _("sonuna kadar okunmuş")
+                if b.tarih then
+                    ek = ek .. " " .. os.date("%d.%m.%Y", b.tarih.bit)
+                    tarihler[b.yol] = b.tarih
+                end
                 if b.vurgu > 0 then ek = ek .. " · " .. T(_("%1 vurgu"), b.vurgu) end
                 ogeler[#ogeler + 1] = { metin = b.baslik, ek = ek, secili = b.kesin, veri = b.yol }
                 if b.kesin then kesin = kesin + 1 end
             end
             local bilgi = T(_("KOReader'da bitirdiğin %1 kitap bulundu. Seçtiklerin 1000Kitap'ta \"Okudum\" yapılacak; ardından vurgularını alıntı olarak göndermek isteyip istemediğini soracağım. \"Bitti\" işaretlenmemiş ama sonuna kadar okunmuş olanlar seçili gelmez."),
                 #bulunan)
+            if next(tarihler) then
+                bilgi = bilgi .. "\n" .. _("Yanında tarih olan kitaplar o tarihte okunmuş olarak kaydedilir; böylece yıllık hedefine doğru yıl sayılır.")
+            end
             if durduruldu then bilgi = _("Tarama yarıda kesildi; bulunanlar:") .. "\n" .. bilgi end
             self:secimListesi{
                 baslik = _("Okuduklarını 1000Kitap'a aktar"),
@@ -162,7 +230,7 @@ return function(BinKitap)
                 onay = function(yollar)
                     self:topluDurumEkle(yollar, Api.DURUM.okudum, function(hazir)
                         UIManager:scheduleIn(1, function() self:aktarilanVurgular(hazir) end)
-                    end)
+                    end, { tarihler = tarihler })
                 end,
             }
         end)

@@ -689,7 +689,9 @@ return function(BinKitap)
 
     --- Dosyaları eşleştirir (eşleşmiş olanları tekrar aramaz) ve durumlarını sıraya alır.
     -- sonra(hazir): sıraya alındıktan sonra { {yol, kitap}, ... } ile çağrılır (isteğe bağlı)
-    function BinKitap:topluDurumEkle(yollar, durum, sonra)
+    -- secenek.tarihler: { [yol] = { bas, bit } } → o kitaplar tarihli okuma olarak gider
+    function BinKitap:topluDurumEkle(yollar, durum, sonra, secenek)
+        local tarihler = secenek and secenek.tarihler or {}
         local eslesmis, aranacak = {}, {}
         for _i, yol in ipairs(yollar) do
             local esl = self:dosyaEslesmesi(yol)
@@ -700,9 +702,11 @@ return function(BinKitap)
             if #liste == 0 then return self:bildir(_("Eklenecek kitap yok.")) end
             local ogeler = {}
             for _i, e in ipairs(liste) do
+                local t = e.yol and tarihler[e.yol]
                 ogeler[#ogeler + 1] = {
                     tur = "durum", kitap_id = e.kitap.id, kitap_adi = e.kitap.adi, durum = durum,
                     sadece_bossa = (durum == Api.DURUM.okuyacagim) or nil,
+                    tarih_bas = t and t.bas or nil, tarih_bit = t and t.bit or nil,
                 }
             end
             self:topluSiraya(ogeler)

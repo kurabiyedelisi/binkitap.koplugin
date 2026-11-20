@@ -150,6 +150,21 @@ YANIT["diger/arama"] = function(r) return { _sonuc = { sonuclar = aramaSonucu(r.
 YANIT["kitaplar/kitapCek"] = function(r)
   local k = KITAPLAR[r.q.id]
   if not k then return { hata = 1, hataMesaji = "Kitap yok" } end
+  if r.q.bolum == "incelemeler" then
+    assert(r.q.s == "populer", "incelemeler popüler sırayla")
+    return { _sonuc = { liste = {
+      { turu = "reklam" },
+      { turu = "yorumlar", id = "274933988", begeniSayisi = 194, yorumSayisi = 1, tarihsaat = "2025-06-05 00:14:44",
+        uye = { adi = "Ece" }, govde = { { baslik = "Kitabı okudu" } },
+        govdeSayfa = { { baslik = "5/10 puan verdi", isPuan = 1, puan = 5, max = 10 }, { tip = "yillikSira", sira = 18 } },
+        alt = { yorumlar = { yorumParse = { parse = { "Doğada yaşamak üzerine. ", { type = "okurKadiler", id = "osgr", item = { adi = "osgr", kadi = "osgr" } }, " da sevdi." }, isUzunKisaltma = true } },
+                kitaplar = { id = r.q.id, adi = k.adi, puan = 7.8 } } },
+      { turu = "duvar" },
+      { turu = "yorumlar", id = "2", begeniSayisi = 3, yorumSayisi = 0, uye = { adi = "Can" }, govdeSayfa = {},
+        alt = { yorumlar = { yorumParse = { parse = { "Kısa ve güzel." }, isUzunKisaltma = false } } } },
+      { turu = "yorumlar", id = "3", uye = { adi = "Boş" }, alt = { yorumlar = { yorumParse = { parse = { "   " } } } } },
+    }, hasMore = true }, bilgi = 1 }
+  end
   if r.q.bolum == "alintilar" then
     return { _sonuc = { liste = {
       { turu = "sozler", begeniSayisi = 489, uye = { adi = "Ersin Yaman" }, alt = { sozler = { kitapid = r.q.id, sayfa = "12", sozParse = { parse = { "Kim bilir kaç insan ", "bir kitabı okuyup..." } } } } },
@@ -192,9 +207,11 @@ YANIT["iletiler/iletiEkle"] = function(r)
   iletiler[#iletiler + 1] = r.form
   return { _sonuc = { id = 5000 + #iletiler }, bilgi = 1 }
 end
+local okuma_tarihi = {}
 YANIT["kitaplar/kitapOku"] = function(r)
   if not kimlikli(r) then return giris_hatasi() end
   durum[r.q.id] = tonumber(r.q.durum)
+  okuma_tarihi[r.q.id] = r.q.forceEkle and { bas = r.q.okuyorTarihsaat, bit = r.q.okuduTarihsaat, toplu = r.q.isTopluIslem } or false
   return { _sonuc = { durum = true }, bilgi = 1 }
 end
 YANIT["kitaplar/kitapPuanVer"] = function(r) puan[r.q.id] = tonumber(r.q.puan); return { _sonuc = {}, bilgi = 1 } end
@@ -248,7 +265,7 @@ YANIT["uyeler/kitaplar/liste"] = function(r)
   local liste = {}
   for _, id in ipairs(ids) do
     local k = KITAPLAR[id]
-    liste[#liste + 1] = { id = id, adi = k.adi, yazarAdi = k.yazar, sayfaSayisi = tostring(k.sayfa) }
+    liste[#liste + 1] = { id = id, adi = k.adi, yazarAdi = k.yazar, sayfaSayisi = tostring(k.sayfa), puan = (id == OKUYACAKLAR[1]) and "8.1" or 0 }
   end
   liste[#liste + 1] = { renderTuru = "reklam", id = "x", adi = "reklam" }
   return { _sonuc = { hasMore = sayfa == 1, kume = 4973230052879385, z = 10, sayfa = sayfa, liste = liste }, bilgi = 1 }
@@ -350,6 +367,8 @@ package.preload["ui/uimanager"] = function()
     show = function(_, w) gosterilen[#gosterilen + 1] = w end,
     close = function(_, w) if w then w._kapandi = true end end,
     scheduleIn = function(_, s, f) zamanlanan[#zamanlanan + 1] = f end,
+    unschedule = function(_, f) for i = #zamanlanan, 1, -1 do if zamanlanan[i] == f then table.remove(zamanlanan, i) end end end,
+    setDirty = function() end,
     forceRePaint = function() end,
     askForRestart = function(_, m) gosterilen[#gosterilen + 1] = { _tur = "Restart", text = m } end,
   }
@@ -391,7 +410,44 @@ package.preload["ffi/util"] = function()
 end
 local eylemler = {}
 package.preload["dispatcher"] = function() return { registerAction = function(_, ad, t) eylemler[ad] = t end } end
-package.preload["device"] = function() return { home_dir = "/kobo" } end
+package.preload["device"] = function()
+  return { home_dir = "/kobo",
+    screen = { getWidth = function() return 600 end, getHeight = function() return 800 end, scaleBySize = function(_, x) return x end },
+    hasKeys = function() return false end, isTouchDevice = function() return true end }
+end
+
+-- Ekran (binkitap_ekran) için KOReader arayüz sınıflarının taklidi
+local function sinif(ad)
+  local C = { _ad = ad }
+  function C:extend(o) o = o or {}; setmetatable(o, { __index = self }); return o end
+  function C:new(o) o = self:extend(o or {}); o._tur = ad; if o._init then o:_init() end; if o.init then o:init() end; return o end
+  function C:getSize() return { w = self.width or (self.dimen and self.dimen.w) or 100, h = self.height or 20 } end
+  return C
+end
+for yol, ad in pairs({
+  ["ui/widget/button"] = "Button", ["ui/widget/buttontable"] = "ButtonTable",
+  ["ui/widget/container/centercontainer"] = "CenterContainer", ["ui/widget/container/framecontainer"] = "FrameContainer",
+  ["ui/widget/horizontalgroup"] = "HorizontalGroup", ["ui/widget/horizontalspan"] = "HorizontalSpan",
+  ["ui/widget/imagewidget"] = "ImageWidget", ["ui/widget/linewidget"] = "LineWidget",
+  ["ui/widget/progresswidget"] = "ProgressWidget", ["ui/widget/textboxwidget"] = "TextBoxWidget",
+  ["ui/widget/textwidget"] = "TextWidget", ["ui/widget/titlebar"] = "TitleBar",
+  ["ui/widget/verticalgroup"] = "VerticalGroup", ["ui/widget/verticalspan"] = "VerticalSpan",
+}) do
+  package.preload[yol] = function() return sinif(ad) end
+end
+package.preload["ui/widget/container/inputcontainer"] = function()
+  local C = sinif("InputContainer")
+  function C:_init() self.key_events = self.key_events or {}; self.ges_events = self.ges_events or {} end
+  return C
+end
+package.preload["ui/geometry"] = function() return { new = function(_, o) return o end } end
+package.preload["ui/gesturerange"] = function() return { new = function(_, o) return o end } end
+package.preload["ui/font"] = function() return { getFace = function(_, ad, boy) return { name = ad, size = boy or 18 } end } end
+package.preload["ui/size"] = function()
+  return { padding = { fullscreen = 15, small = 2, large = 10 }, border = { thin = 1 }, line = { thick = 2 },
+           span = { horizontal_default = 10, vertical_large = 5, vertical_default = 2 } }
+end
+package.preload["ffi/blitbuffer"] = function() return { COLOR_WHITE = 0, COLOR_DARK_GRAY = 1, COLOR_LIGHT_GRAY = 2 } end
 
 -- dosya sistemi
 local FS = {
@@ -1030,7 +1086,7 @@ fm.settings:saveSetting("kitapliga_ekle", nil)
 do
 print("28) GitHub'dan güncelleme")
 local G = Plugin._guncelleme
-kontrol(Plugin.SURUM == "0.3.0", "sürüm _meta.lua'dan okundu: " .. tostring(Plugin.SURUM))
+kontrol(Plugin.SURUM == "0.4.0", "sürüm _meta.lua'dan okundu: " .. tostring(Plugin.SURUM))
 kontrol(G.dahaYeni("1.2.10", "1.2.9") and G.dahaYeni("1.3", "1.2.9") and not G.dahaYeni("1.2.3", "1.2.3")
   and not G.dahaYeni("1.2.2", "1.2.3"), "sürüm karşılaştırma sayıyla yapılıyor")
 local ayar_ogeleri = fm:ayarlarMenusu()
@@ -1039,7 +1095,7 @@ for _, o in ipairs(ayar_ogeleri) do
   if o.text and o.text:find("^Güncellemeleri denetle") then gun_oge = o end
   if o.text == "Haftada bir kendiliğinden denetle" then oto_oge = o end
 end
-kontrol(gun_oge and gun_oge.text == "Güncellemeleri denetle (sürüm 0.3.0)" and oto_oge and oto_oge.checked_func(),
+kontrol(gun_oge and gun_oge.text == "Güncellemeleri denetle (sürüm 0.4.0)" and oto_oge and oto_oge.checked_func(),
   "ayarlarda denetle düğmesi ve varsayılan açık haftalık denetim")
 
 local DIZ = GERCEK .. "/binkitap.koplugin"
@@ -1047,7 +1103,7 @@ gercek_lfs.mkdir(GERCEK); gercek_lfs.mkdir(DIZ)
 local function yaz(yol, m) local h = assert(io.open(yol, "wb")); h:write(m); h:close() end
 local function oku(yol) local h = io.open(yol, "rb"); if not h then return nil end; local m = h:read("*a"); h:close(); return m end
 yaz(DIZ .. "/main.lua", "-- eski main\n")
-yaz(DIZ .. "/_meta.lua", 'return { version = "0.3.0" }\n')
+yaz(DIZ .. "/_meta.lua", 'return { version = "0.4.0" }\n')
 yaz(DIZ .. "/ayar.lua", 'return { oturum_kodu = "GIZLI" }\n')
 fm.path = DIZ
 
@@ -1068,59 +1124,59 @@ local function depoKur(surum, dosyalar, bozuk)
   GITHUB[LISTE] = encode(liste)
 end
 
-depoKur("0.3.0", { ["main.lua"] = "-- aynı\n" })
+depoKur("0.4.0", { ["main.lua"] = "-- aynı\n" })
 fm:guncellemeDenetle(false)
-kontrol(son("InfoMessage").text == "En son sürümü kullanıyorsun (0.3.0).", "güncel: " .. son("InfoMessage").text)
+kontrol(son("InfoMessage").text == "En son sürümü kullanıyorsun (0.4.0).", "güncel: " .. son("InfoMessage").text)
 kontrol(fm.settings:readSetting("guncelleme_son_denetim") == os.time(), "denetim zamanı kaydedildi")
 
 GITHUB[HAM .. "_meta.lua"] = 503
 fm:guncellemeDenetle(false)
 kontrol(son("InfoMessage").text:find("HTTP 503", 1, true) ~= nil, "hata gösterildi: " .. son("InfoMessage").text)
 
-depoKur("0.3.1", { ["main.lua"] = "-- yeni main\nreturn 1\n", ["binkitap_yeni.lua"] = "return {}\n", ["ayar.lua"] = "return { oturum_kodu = \"SIFIRLANDI\" }\n",
-  ["binkitap_yenilikler.lua"] = 'return { { surum = "0.3.1", maddeler = { "Yeni şey bir", "Yeni şey iki" } }, { surum = "0.3.0", maddeler = { "Eski şey" } } }\n' })
+depoKur("0.4.1", { ["main.lua"] = "-- yeni main\nreturn 1\n", ["binkitap_yeni.lua"] = "return {}\n", ["ayar.lua"] = "return { oturum_kodu = \"SIFIRLANDI\" }\n",
+  ["binkitap_yenilikler.lua"] = 'return { { surum = "0.4.1", maddeler = { "Yeni şey bir", "Yeni şey iki" } }, { surum = "0.4.0", maddeler = { "Eski şey" } } }\n' })
 fm:guncellemeDenetle(false)
 local gk = son("ConfirmBox")
-kontrol(gk and gk.text:find("yeni sürümü var: 0.3.1 (sendeki 0.3.0)", 1, true) ~= nil, "yeni sürüm soruldu")
+kontrol(gk and gk.text:find("yeni sürümü var: 0.4.1 (sendeki 0.4.0)", 1, true) ~= nil, "yeni sürüm soruldu")
 kontrol(gk.text:find("Yenilikler:\n• Yeni şey bir\n• Yeni şey iki", 1, true) and not gk.text:find("Eski şey", 1, true),
   "onay penceresinde yalnızca yeni sürümün notları: " .. gk.text:gsub("\n", " / "))
 gk.ok_callback()
 kontrol(oku(DIZ .. "/main.lua") == "-- yeni main\nreturn 1\n" and oku(DIZ .. "/binkitap_yeni.lua") == "return {}\n"
-  and oku(DIZ .. "/_meta.lua"):find("0.3.1", 1, true), "yeni dosyalar yerinde")
+  and oku(DIZ .. "/_meta.lua"):find("0.4.1", 1, true), "yeni dosyalar yerinde")
 kontrol(oku(DIZ .. "/ayar.lua") == 'return { oturum_kodu = "GIZLI" }\n', "ayar.lua'ya dokunulmadı")
 local ayar_istendi = false
 for _, r in ipairs(istekler) do if r.url == HAM .. "ayar.lua" then ayar_istendi = true end end
 kontrol(not ayar_istendi, "depodaki ayar.lua indirilmedi bile")
 kontrol(oku(DIZ .. "/.yedek/main.lua") == "-- eski main\n", "eski sürüm .yedek'te")
 kontrol(gercek_lfs.attributes(DIZ .. "/.guncelleme/main.lua", "mode") == nil, "geçici klasörde dosya kalmadı")
-kontrol(son("Restart") and son("Restart").text:find("0.3.1", 1, true), "yeniden başlatma istendi")
-kontrol(fm.settings:readSetting("guncelleme_kurulan") == "0.3.1", "kurulan sürüm kaydedildi")
+kontrol(son("Restart") and son("Restart").text:find("0.4.1", 1, true), "yeniden başlatma istendi")
+kontrol(fm.settings:readSetting("guncelleme_kurulan") == "0.4.1", "kurulan sürüm kaydedildi")
 fm:guncellemeDenetle(false)
-kontrol(son("InfoMessage").text:find("0.3.1 zaten indirildi", 1, true) ~= nil, "yeniden başlatmadan önce tekrar sormuyor")
+kontrol(son("InfoMessage").text:find("0.4.1 zaten indirildi", 1, true) ~= nil, "yeniden başlatmadan önce tekrar sormuyor")
 
 local once_main = oku(DIZ .. "/main.lua")
-depoKur("0.3.2", { ["main.lua"] = "bu lua değil (\n" })
-fm:guncellemeKur("0.3.2")
+depoKur("0.4.2", { ["main.lua"] = "bu lua değil (\n" })
+fm:guncellemeKur("0.4.2")
 kontrol(son("InfoMessage").text:find("main.lua bozuk", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "bozuk dosya: hiçbir şey değişmedi")
-depoKur("0.3.2", { ["main.lua"] = "return 2\n" }, { boyut = "main.lua" })
-fm:guncellemeKur("0.3.2")
+depoKur("0.4.2", { ["main.lua"] = "return 2\n" }, { boyut = "main.lua" })
+fm:guncellemeKur("0.4.2")
 kontrol(son("InfoMessage").text:find("eksik indi", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "eksik indirme: hiçbir şey değişmedi")
-depoKur("0.3.2", { ["main.lua"] = "return 2\n", ["resimler"] = "x" }, { klasor = "resimler" })
-fm:guncellemeKur("0.3.2")
+depoKur("0.4.2", { ["main.lua"] = "return 2\n", ["resimler"] = "x" }, { klasor = "resimler" })
+fm:guncellemeKur("0.4.2")
 kontrol(son("InfoMessage").text:find("elle kurulmalı", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "yeni klasör içeren sürüm otomatik kurulmadı")
 
 -- haftalık sessiz denetim
-depoKur("0.3.3", { ["main.lua"] = "return 3\n" })
+depoKur("0.4.3", { ["main.lua"] = "return 3\n" })
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 2 * 24 * 3600)
 fm:onNetworkConnected(); calistir()
-kontrol(son("ConfirmBox") == gk or not son("ConfirmBox").text:find("0.3.3", 1, true), "iki gün önce denetlendiyse sormadı")
+kontrol(son("ConfirmBox") == gk or not son("ConfirmBox").text:find("0.4.3", 1, true), "iki gün önce denetlendiyse sormadı")
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 8 * 24 * 3600)
 fm:onNetworkConnected(); fm2:onNetworkConnected(); calistir()
 local sorular = 0
-for _, w in ipairs(gosterilen) do if w._tur == "ConfirmBox" and w.text:find("0.3.3", 1, true) then sorular = sorular + 1 end end
+for _, w in ipairs(gosterilen) do if w._tur == "ConfirmBox" and w.text:find("0.4.3", 1, true) then sorular = sorular + 1 end end
 kontrol(sorular == 1, "bir hafta geçince bir kez sordu (iki örnek açıkken bile)")
 kontrol(son("ConfirmBox").cancel_text == "Sonra", "sormadan kurmuyor")
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 8 * 24 * 3600)
@@ -1216,7 +1272,7 @@ local ob = son("ButtonDialog")
 kontrol(ob and ob.title:find("otomatik eşleştirildi", 1, true) and ob.title:find("Kaos Lordu", 1, true)
   and ob.title:find("Yanlış olabilir", 1, true), "açılışta otomatik eşleşme hatırlatıldı")
 kontrol(durum["9517"] == nil, "doğrulanmadan Okuyorum gönderilmedi")
-local menu_metni = op:menuOgeleri()[1].text_func()
+local menu_metni = op:menuOgeleri()[2].text_func()
 kontrol(menu_metni:find("otomatik, onaylanmadı", 1, true) ~= nil, "menüde de görünüyor: " .. menu_metni)
 oui.highlight._dugme.fn({ selected_text = { text = "Deneme.", pos0 = "/body/DocFragment[2]/body/p[1]/text().0" }, onClose = function() end }).callback()
 kontrol(son("ButtonDialog").title:find("otomatik eşleşme, onaylanmadı", 1, true) ~= nil, "alıntı penceresinde uyarı")
@@ -1455,6 +1511,25 @@ end
 kontrol(soru_sayisi == 1 and soru_sonra == 1, "bir daha sorulmadı")
 
 YAN_DOSYALAR["/kobo/Kafka/Donusum.epub"].summary = { status = "complete", modified = "2026-10-01" }
+YAN_DOSYALAR["/kobo/Kafka/Donusum.epub"].partial_md5_checksum = "md5-donusum"
+-- KOReader istatistik veritabanı taklidi
+local sq3_acik = 0
+package.preload["lua-ljsqlite3/init"] = function()
+  return { open = function()
+    sq3_acik = sq3_acik + 1
+    local md5
+    local stmt = {}
+    function stmt:reset() return self end
+    function stmt:bind(m) md5 = m; return self end
+    function stmt:step()
+      if md5 == "md5-donusum" then return { os.time{ year = 2026, month = 9, day = 1, hour = 20, min = 0 }, os.time{ year = 2026, month = 9, day = 20, hour = 22, min = 30 } } end
+      return { nil, nil }
+    end
+    function stmt:close() end
+    return { prepare = function() return stmt end, close = function() sq3_acik = sq3_acik - 1 end }
+  end }
+end
+DOSYALAR["/tmp/statistics.sqlite3"] = true
 YAN_DOSYALAR["/kobo/Kafka/Donusum.epub"].doc_pages = 100
 YAN_DOSYALAR["/kobo/Kafka/Donusum.epub"].annotations = {
   { text = "Bir sabah Gregor Samsa", note = "Ünlü açılış", datetime = "2026-09-01 10:00:00", page = "/body/DocFragment[2].0", pos0 = "/body/DocFragment[2].0", pageno = 50, drawer = "lighten" },
@@ -1480,14 +1555,19 @@ local al = son("Menu")
 kontrol(al.title == "Okuduklarını 1000Kitap'a aktar", "liste açıldı")
 local sat = {}
 for _, it in ipairs(al.item_table) do if it.indeks then sat[#sat + 1] = it.text .. " [" .. tostring(it.mandatory) .. "]" end end
-kontrol(#sat == 2 and sat[1] == "☑ Dönüşüm [bitti · 2 vurgu]" and sat[2] == "☐ Gog [sonuna kadar okunmuş · 1 vurgu]",
+kontrol(sq3_acik == 0, "istatistik veritabanı tarama sonunda kapatıldı")
+kontrol(#sat == 2 and sat[1] == "☑ Dönüşüm [bitti 20.09.2026 · 2 vurgu]" and sat[2] == "☐ Gog [sonuna kadar okunmuş · 1 vurgu]",
   "bitenler (yarım bırakılan hariç), işaretli olan seçili: " .. table.concat(sat, " | "))
 menuSec(al, function(it) return it.text == "☐ Gog" end)
-durum["701"] = 2; durum["800"] = 2
+durum["701"] = -1; durum["800"] = 2
 menuSec(al, function(it) return it.eylem == "onay" end)
 local once_alinti, once_not = #alintilar, #notlar
 calistir()
 kontrol(durum["701"] == 1 and durum["800"] == 1, "seçilenler 1000Kitap'ta Okudum yapıldı")
+local ot = okuma_tarihi["701"]
+kontrol(ot and ot.bas == "01.09.2026 20:00" and ot.bit == "20.09.2026 22:30" and ot.toplu == "1",
+  "okuma istatistiklerdeki tarihlerle kaydedildi: " .. (ot and (ot.bas .. " → " .. ot.bit) or "tarihsiz"))
+kontrol(okuma_tarihi["800"] == false, "1000Kitap'ta açık okuması olan kitap tarihsiz (ikinci okuma açılmasın)")
 local vl = son("Menu")
 kontrol(vl.title == "Alıntılarını da göndereyim mi?", "ardından vurgular soruldu")
 local vs = {}
@@ -1698,7 +1778,7 @@ local G = Plugin._guncelleme
 kontrol(G.yenilikleriCoz("os.exit(3)") == nil and G.yenilikleriCoz("return { { surum = '1', maddeler = { io and 'x' or 'y' } } }")[1].maddeler[1] == "y",
   "sürüm notları boş ortamda okunuyor (kod çalışmıyor)")
 local yl = fm:yenilikListesi()
-kontrol(yl and yl[1].surum == Plugin.SURUM and #yl[1].maddeler >= 5, "kurulu sürümün notları var")
+kontrol(yl and yl[1].surum == Plugin.SURUM and #yl[1].maddeler >= 3, "kurulu sürümün notları var")
 local n = #gosterilen
 fm.settings:saveSetting("son_gorulen_surum", "0.2.8")
 fm:yenilikKontrol(); calistir()
@@ -1714,6 +1794,113 @@ for _, o in ipairs(fm:ayarlarMenusu()) do if o.text == "Bu sürümde neler var" 
 oge.callback()
 tv = son("TextViewer")
 kontrol(tv.text:find("^Sürüm " .. Plugin.SURUM:gsub("%.", "%%.")) and not tv.text:find("Sürüm 0.2.9", 1, true), "menüden yalnızca bu sürüm")
+end
+
+do
+print("41) 1000Kitap puanı ve popüler incelemeler")
+kontrol(Plugin.puanYazi("7.8") == "★ 7,8" and Plugin.puanYazi(8) == "★ 8,0" and Plugin.puanYazi("7,26") == "★ 7,3"
+  and Plugin.puanYazi(0) == nil and Plugin.puanYazi("") == nil and Plugin.puanYazi(11) == nil, "puan biçimi")
+kontrol(Plugin.kitapEtiketi({ adi = "Gog", yazar = "Giovanni Papini", puan = 8.1 }) == "Gog — Giovanni Papini · ★ 8,1"
+  and Plugin.kitapEtiketi({ adi = "Gog", yazar = "" }) == "Gog", "listelerde kitabın yanında puan")
+local raf = Plugin.Api:rafListesi("ornek_okur", "okuyacaklari")
+kontrol(raf[1].puan == 8.1 and raf[2].puan == nil, "raf listesinden puan okunuyor (0 = puan yok)")
+p:populerIncelemeler()
+local tv = son("TextViewer")
+kontrol(tv.title:find("popüler incelemeler", 1, true) ~= nil, "incelemeler açıldı: " .. tv.title)
+kontrol(tv.text:find("Ece · 5/10 puan verdi · 194 beğeni · 1 yorum\n\nDoğada yaşamak üzerine. @osgr da sevdi.…", 1, true) ~= nil,
+  "yazan, verdiği puan, beğeni; etiketlenen okur metinde: " .. tv.text:sub(1, 120):gsub("\n", " / "))
+kontrol(tv.text:find("1000kitap.com/gonderi/274933988", 1, true) and tv.text:find("Can · 3 beğeni\n\nKısa ve güzel.", 1, true)
+  and not tv.text:find("Boş", 1, true), "kısaltılmışa bağlantı, boş inceleme atlandı")
+-- Tarih yedeği: istatistik yoksa "Bitti" işaretleme günü
+local ds = { readSetting = function(_, k) return ({ summary = { status = "complete", modified = "2025-03-14" } })[k] end }
+local t = Plugin._okumaTarihleri(ds, nil)
+kontrol(t and os.date("%d.%m.%Y %H:%M", t.bit) == "14.03.2025 12:00" and t.bas == t.bit and t.kaynak == "bitti", "istatistik yoksa Bitti günü")
+local gelecek = { readSetting = function(_, k) return ({ summary = { modified = "2099-01-01" } })[k] end }
+kontrol(Plugin._okumaTarihleri(gelecek, nil) == nil, "gelecekteki tarih gönderilmez")
+end
+
+do
+print("42) 1000Kitap ekranı")
+local function metinler(w, out, gorulen)
+  out = out or {}; gorulen = gorulen or {}
+  if type(w) ~= "table" or gorulen[w] then return out end
+  gorulen[w] = true
+  if type(w.text) == "string" then out[#out + 1] = w.text end
+  if type(w.title) == "string" then out[#out + 1] = w.title end
+  if w._tur == "ButtonTable" then
+    for _, satir in ipairs(w.buttons) do for _, b in ipairs(satir) do out[#out + 1] = "[" .. b.text .. "]" end end
+  end
+  for _, c in ipairs(w) do metinler(c, out, gorulen) end
+  return out
+end
+local function dugmeBul(w, metin, gorulen)
+  gorulen = gorulen or {}
+  if type(w) ~= "table" or gorulen[w] then return nil end
+  gorulen[w] = true
+  if w._tur == "ButtonTable" then
+    for _, satir in ipairs(w.buttons) do for _, b in ipairs(satir) do if b.text == metin then return b end end end
+  end
+  for _, c in ipairs(w) do local b = dugmeBul(c, metin, gorulen); if b then return b end end
+end
+local function ekranBul()
+  for i = #gosterilen, 1, -1 do if gosterilen[i].covers_fullscreen and gosterilen[i].veri then return gosterilen[i] end end
+end
+local yil = os.date("%Y")
+DOSYALAR["/kobo/Walden - Thoreau.epub"] = true
+G_reader_settings:saveSetting("lastfile", "/kobo/Walden - Thoreau.epub")
+fm:sonAlintiKaydet({ tur = "ozel_not", metin = "Ormana gittim, çünkü bilinçli yaşamak istiyordum.", kitap_adi = "Walden", sayfa = "89" })
+fm:ekranAc(); calistir()
+local e = ekranBul()
+kontrol(e ~= nil, "dosya tarayıcısında ekran açıldı")
+local hepsi = table.concat(metinler(e), " | ")
+for _, beklenen in ipairs({ "1000Kitap", "SON OKUDUĞUN", "Henry David Thoreau", "[Devam et]", yil .. " OKUMA HEDEFİ", "4 / 30 kitap · 26 kitap kaldı",
+    "OKUYACAKLARIM · 4 kitap", "[Ne okusam?]", "[Tümü (4)]", "SON ALINTIN", "“Ormana gittim, çünkü bilinçli yaşamak istiyordum.”",
+    "Walden · s. 89 · az önce · gizli", "KÜTÜPHANE", "[Okuduklarımı aktar]", "[1000Kitap kitaplığım]", "[Yenile]", "[Bekleyen yok]" }) do
+  kontrol(hepsi:find(beklenen, 1, true) ~= nil, "ekranda: " .. beklenen)
+end
+kontrol(hepsi:find("★ 8,1", 1, true) ~= nil, "rafta 1000Kitap puanı")
+dugmeBul(e, "Devam et").callback()
+kontrol(e._kapandi and acilan == "/kobo/Walden - Thoreau.epub", "Devam et son kitabı açtı")
+-- Tümü listesi
+fm:ekranAc(); e = ekranBul()
+dugmeBul(e, "Tümü (4)").callback()
+local tm = son("Menu")
+kontrol(tm.title:find("Okuyacaklarım (4)", 1, true) ~= nil, "Tümü listesi: " .. tm.title)
+local puanli
+for _, it in ipairs(tm.item_table) do if it.mandatory == "★ 8,1" then puanli = it end end
+kontrol(puanli ~= nil, "Tümü listesinde puan sağda")
+-- Hata olursa ekran açılmaz, günlüğe yazılır
+local eski = Plugin.ekranIcerigi
+Plugin.ekranIcerigi = function() error("deneme hatası") end
+p.settings:delSetting("hata_gunlugu")
+fm:ekranAc()
+Plugin.ekranIcerigi = eski
+kontrol(son("InfoMessage").text:find("ekranı açılamadı", 1, true) and p:hataGunluguMetni():find("deneme hatası", 1, true), "ekran hatası güvenle yakalandı")
+p.settings:delSetting("hata_gunlugu")
+-- Okurken
+p:ekranAc(); calistir()
+e = ekranBul()
+hepsi = table.concat(metinler(e), " | ")
+for _, beklenen in ipairs({ "ŞU AN OKUDUĞUN", "Walden", "[Vurgular]", "[İleti yaz]", "[Puan ver]", "[Bitirdim]" }) do
+  kontrol(hepsi:find(beklenen, 1, true) ~= nil, "okurken ekranda: " .. beklenen)
+end
+kontrol(hepsi:find("s. %d+ / %d+") ~= nil and hepsi:find("%%%d+") ~= nil, "sayfa ve yüzde: " .. (hepsi:match("s%. %d+ / %d+[^|]*") or "yok"))
+kontrol(not hepsi:find("KÜTÜPHANE", 1, true), "okurken kütüphane kısayolları yok")
+e:onClose()
+kontrol(e._kapandi and p._ekran == nil, "kapandı")
+-- Sığmayınca: önce son alıntı çıkar, sonra raf kapaksız kısalır
+local function w(h) return { getSize = function() return { h = h } end } end
+local bl = { { ad = "kitap", w = w(200) }, { ad = "raf", w = w(250), kisa = function() return w(60) end },
+             { ad = "alinti", w = w(120), atilabilir = true } }
+local sec = Plugin.ekranaSigdir(bl, 100, 1000)
+kontrol(#sec == 3, "sığıyorsa hepsi")
+sec = Plugin.ekranaSigdir(bl, 100, 560)
+kontrol(#sec == 2 and bl[3].atildi and not bl[2].kisaldi, "önce son alıntı çıktı")
+bl = { { ad = "kitap", w = w(200) }, { ad = "raf", w = w(250), kisa = function() return w(60) end },
+       { ad = "alinti", w = w(120), atilabilir = true } }
+sec = Plugin.ekranaSigdir(bl, 100, 400)
+kontrol(#sec == 2 and bl[3].atildi and bl[2].kisaldi and sec[2]:getSize().h == 60, "sonra raf kısaldı")
+kontrol(eylemler.binkitap_ekran and eylemler.binkitap_ekran.event == "BinKitapEkran", "hareket eylemi kayıtlı")
 end
 
 print("20) Menüler hatasız kuruluyor")

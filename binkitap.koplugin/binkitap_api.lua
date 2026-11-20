@@ -18,6 +18,9 @@ Okuma
 Yazma
   GET  v2/kitaplar/kitapOku?id=&durum=                    okuma durumu
   GET  v2/kitaplar/kitapPuanVer?id=&puan=                 puan
+  GET  v2/kitaplar/kitapOku?id=&durum=1&forceEkle=1&okuyorTarihsaat=&okuduTarihsaat=&isTopluIslem=1
+                                                         tarihli okuma (sitedeki "Toplu okuma ekle")
+  GET  v2/kitaplar/kitapCek?id=&bolum=incelemeler&s=populer popüler incelemeler
   GET  v2/kitaplar/kitapSayfaGuncelle?id=&okumaId=&sayfa=&sayfa2=   ilerleme
   GET  v2/kitaplar/kitapKutuphanemeEkle?id=&forceEkle=1   kitaplığa ekle (forceEkle=0: ekle/çıkar)
   POST v2/alintilar/alintiEkle                            alıntı
@@ -245,6 +248,33 @@ local function sayfalama(s)
     return nil
 end
 
+--- 1000Kitap genel puanı (10 üzerinden). "7,8", "7.8", 7.8 ya da 0/boş gelebilir.
+local function puanOku(v)
+    if type(v) == "string" then v = tonumber((v:gsub(",", "."))) end
+    v = tonumber(v)
+    if v and v > 0 and v <= 10 then return v end
+    return nil
+end
+Api.puanOku = puanOku
+
+--- Parse dizisi (metin parçaları + etiketlenen kitap/yazar/okur) → düz metin
+local function parseMetni(parse)
+    if type(parse) ~= "table" then return nil end
+    local parcalar = {}
+    for _i, p in ipairs(parse) do
+        if type(p) == "string" then
+            parcalar[#parcalar + 1] = p
+        elseif type(p) == "table" and type(p.item) == "table" then
+            local ad = p.item.adi or p.item.kadi
+            if type(ad) == "string" and ad ~= "" then
+                parcalar[#parcalar + 1] = (p.type == "okurKadiler" and "@" or "") .. ad
+            end
+        end
+    end
+    if #parcalar == 0 then return nil end
+    return table.concat(parcalar)
+end
+
 local function sozMetni(oge)
     local soz = type(oge.alt) == "table" and oge.alt.sozler
     if type(soz) ~= "table" then return nil end
@@ -277,6 +307,7 @@ function Api:kitapAra(sorgu)
                 id = tostring(s.icerik.id),
                 adi = yazi(s.icerik.adi ~= nil and s.icerik.adi or s.name),
                 yazar = yazi(s.icerik.yazarAdi),
+                puan = puanOku(s.icerik.puan),
             }
         end
     end
@@ -342,6 +373,7 @@ function Api:basimlar(kitap_id, sayfalama_bilgisi)
                 sayfa = tonumber(bb.sayfaSayisi),
                 isbn = yazi(bb.isbn),
                 yil = yazi(bb.baskiYili),
+                puan = puanOku(b.puan),
             }
         end
     end
@@ -410,6 +442,7 @@ function Api:rafListesi(kadi, raf, sayfalama_bilgisi)
                 adi = yazi(k.adi),
                 yazar = yazi(k.yazarAdi),
                 sayfa = tonumber(k.sayfaSayisi),
+                puan = puanOku(k.puan),
             }
         end
     end
@@ -449,6 +482,45 @@ function Api:populerAlintilar(kitap_id)
                     sayfa = ham and tonumber(ham.sayfa) or nil,
                 }
             end
+        end
+    end
+    return liste
+end
+
+--- Bir kitabın popüler incelemeleri.
+-- Dönüş: { {id, metin, kisaltilmis, uye, begeni, yorum, puan (incelemecinin, 10 üzerinden), tarih}, ... }
+function Api:populerIncelemeler(kitap_id)
+    local data, err, tur = self:istek("GET", "kitaplar/kitapCek", {
+        { "id", kitap_id }, { "bolum", "incelemeler" }, { "site", "" }, { "s", "populer" },
+        { "puan", "" }, { "q", "" }, { "sayfa", 1 }, { "kume", -1 }, { "z", 0 },
+    }, nil, false)
+    if not data then return nil, err, tur end
+    local liste = {}
+    local L = data._sonuc and data._sonuc.liste
+    for _i, o in ipairs(type(L) == "table" and L or {}) do
+        local y = type(o) == "table" and o.turu == "yorumlar" and type(o.alt) == "table" and o.alt.yorumlar
+        local yp = type(y) == "table" and y.yorumParse
+        local metin = type(yp) == "table" and parseMetni(yp.parse)
+        if metin and metin:match("%S") then
+            local verdigi
+            for _j, g in ipairs(type(o.govdeSayfa) == "table" and o.govdeSayfa or {}) do
+                if type(g) == "table" and tonumber(g.isPuan) == 1 then
+                    verdigi = tonumber(g.puan)
+                    if verdigi and tonumber(g.max) and tonumber(g.max) ~= 10 and tonumber(g.max) > 0 then
+                        verdigi = verdigi * 10 / tonumber(g.max)
+                    end
+                end
+            end
+            liste[#liste + 1] = {
+                id = yazi(o.id),
+                metin = metin,
+                kisaltilmis = yp.isUzunKisaltma == true,
+                uye = type(o.uye) == "table" and yazi(o.uye.adi) or "",
+                begeni = tonumber(o.begeniSayisi) or 0,
+                yorum = tonumber(o.yorumSayisi) or 0,
+                puan = verdigi,
+                tarih = yazi(o.tarihsaat),
+            }
         end
     end
     return liste
@@ -526,7 +598,17 @@ end
 -- Yazma uç noktaları
 ---------------------------------------------------------------------------
 
-function Api:durumAyarla(kitap_id, durum)
+--- tarih verilirse ({ bas = zaman, bit = zaman }) okuma, sitenin "Toplu okuma ekle"
+-- sayfasındaki gibi başlangıç ve bitiş tarihiyle kaydedilir; yıllık hedefe doğru yıla sayılır.
+function Api:durumAyarla(kitap_id, durum, tarih)
+    if type(tarih) == "table" and tarih.bas and tarih.bit then
+        return self:istek("GET", "kitaplar/kitapOku", {
+            { "id", kitap_id }, { "durum", durum }, { "forceEkle", 1 },
+            { "okuyorTarihsaat", os.date("%d.%m.%Y %H:%M", tarih.bas) },
+            { "okuduTarihsaat", os.date("%d.%m.%Y %H:%M", tarih.bit) },
+            { "isTopluIslem", 1 },
+        }, nil, true)
+    end
     return self:istek("GET", "kitaplar/kitapOku", {
         { "id", kitap_id }, { "durum", durum }, { "yeniOkuma", 0 }, { "neOkusam", 0 },
     }, nil, true)

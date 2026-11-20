@@ -3,6 +3,15 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "0.4.0",
+        maddeler = {
+            "Yeni: 1000Kitap ekranı (menünün en üstünde; hareket ayarlarında \"1000Kitap: ekranı aç\"). Okuduğun kitap, yıllık hedefin, Okuyacaklarım rafı, son alıntın ve bekleyen işler tek ekranda. Dosya tarayıcısında Devam et ve kütüphane kısayolları da var.",
+            "Popüler incelemeler: okurken menüde, kitabın en beğenilen incelemeleri, yazanın verdiği puanla.",
+            "1000Kitap puanı listelerde görünüyor: arama sonuçları, baskılar, Okuyacaklarım, Ne okusam?, kitaplığım.",
+            "Okuduklarımı aktar artık okuma tarihlerini de gönderiyor (KOReader istatistiklerinden; yoksa Bitti işaretlediğin gün). Eski kitaplar bu yılın hedefine sayılmıyor.",
+        },
+    },
+    {
         surum = "0.3.0",
         maddeler = {
             "Bu ekran: güncellemeden sonra yenilikler bir kez gösterilir; Ayarlar → Bu sürümde neler var.",

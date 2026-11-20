@@ -127,7 +127,9 @@ return function(BinKitap)
         local buttons = {}
         for _i, o in ipairs(secim) do
             local k = o.kitap
-            local etiket = (o.yol and "✓ " or "") .. k.adi .. (k.yazar ~= "" and (" — " .. k.yazar) or "")
+            local etiket = (o.yol and "✓ " or "") .. k.adi .. ((k.yazar or "") ~= "" and (" — " .. k.yazar) or "")
+            local py = BinKitap.puanYazi(k.puan)
+            if py then etiket = etiket .. " · " .. py end
             buttons[#buttons + 1] = {{
                 text = etiket,
                 align = "left",
@@ -286,6 +288,37 @@ return function(BinKitap)
         end)
     end
 
+    local function puanMetni(p)
+        if math.floor(p) == p then return tostring(math.floor(p)) end
+        return (string.format("%.1f", p):gsub("%.", ","))
+    end
+
+    function BinKitap:populerIncelemeler()
+        local kitap = self:kitapBilgisi()
+        if not kitap then return self:kitapEslestir(function() self:populerIncelemeler() end) end
+        NetworkMgr:runWhenOnline(function()
+            local bekle = self:bekle(_("İncelemeler getiriliyor…"))
+            local liste, err = Api:populerIncelemeler(kitap.id)
+            UIManager:close(bekle)
+            if not liste then return self:hataGoster(err) end
+            if #liste == 0 then return self:bildir(_("Bu kitap için inceleme bulunamadı.")) end
+            local parcalar = {}
+            for _i, y in ipairs(liste) do
+                local ust = {}
+                if y.uye ~= "" then ust[#ust + 1] = y.uye end
+                if y.puan then ust[#ust + 1] = T(_("%1/10 puan verdi"), puanMetni(y.puan)) end
+                ust[#ust + 1] = T(_("%1 beğeni"), y.begeni)
+                if y.yorum > 0 then ust[#ust + 1] = T(_("%1 yorum"), y.yorum) end
+                local metin = Y.kirp(y.metin)
+                if y.kisaltilmis then
+                    metin = metin .. "…\n" .. T(_("(Devamı 1000Kitap'ta: 1000kitap.com/gonderi/%1)"), y.id)
+                end
+                parcalar[#parcalar + 1] = table.concat(ust, " · ") .. "\n\n" .. metin
+            end
+            metinGoster(T(_("%1 — popüler incelemeler"), kitap.adi), table.concat(parcalar, "\n\n— — —\n\n"))
+        end)
+    end
+
     -------------------------------------------------------------------------
     -- Okuma hedefi
     -------------------------------------------------------------------------
@@ -389,7 +422,7 @@ return function(BinKitap)
     -- Toplu gönderimde tek bildirim olsun diye gönderim bitene kadar bekler.
     function BinKitap:hedefBildirimiPlanla()
         if not self.settings:nilOrTrue("hedef_bildirimi") then return end
-        if self._hedef_planli then UIManager:unschedule(self._hedef_planli) end
+        if self._hedef_planli and UIManager.unschedule then UIManager:unschedule(self._hedef_planli) end
         local f
         f = function()
             if BinKitap.gonderimSuruyor() then return UIManager:scheduleIn(5, f) end
