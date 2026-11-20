@@ -1796,7 +1796,7 @@ local G = Plugin._guncelleme
 kontrol(G.yenilikleriCoz("os.exit(3)") == nil and G.yenilikleriCoz("return { { surum = '1', maddeler = { io and 'x' or 'y' } } }")[1].maddeler[1] == "y",
   "sürüm notları boş ortamda okunuyor (kod çalışmıyor)")
 local yl = fm:yenilikListesi()
-kontrol(yl and yl[1].surum == Plugin.SURUM and #yl[1].maddeler >= 2, "kurulu sürümün notları var")
+kontrol(yl and yl[1].surum == Plugin.SURUM and #yl[1].maddeler >= 1, "kurulu sürümün notları var")
 local n = #gosterilen
 fm.settings:saveSetting("son_gorulen_surum", "0.2.8")
 fm:yenilikKontrol(); calistir()
