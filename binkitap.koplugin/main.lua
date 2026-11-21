@@ -1349,20 +1349,49 @@ function BinKitap:sayfamiGonder()
             self:bildir(T(_("1000Kitap'ta sayfan güncellendi: s. %1 / %2"), sayfa, toplam))
         end
         if m.durum == Api.DURUM.okuyorum then return gonder(m) end
+        --- Durumu değiştirdikten sonra okumayı yeniden al; Okuyorum olduysa sayfayı gönder
+        local function sonraGonder(r, e)
+            if not r then return self:hataGoster(e) end
+            if self.bkDurumKaydet then self:bkDurumKaydet(kitap.id, Api.DURUM.okuyorum) end
+            local m3, e3 = Api:okumaDurumu(kitap.id)
+            if not m3 then return self:hataGoster(e3) end
+            if m3.durum ~= Api.DURUM.okuyorum then
+                return self:hataGoster(T(_("1000Kitap durumu değiştirmedi (hâlâ \"%1\"); sayfa gönderilmedi."),
+                    Api.DURUM_ADI[m3.durum] or tostring(m3.durum)))
+            end
+            gonder(m3)
+        end
         if m.durum == Api.DURUM.okudum then
-            return self:hataGoster(_("1000Kitap'ta bu kitap \"Okudum\" görünüyor; sayfa yalnızca \"Okuyorum\" olan kitapta güncellenir. Yeniden okuyorsan sitede yeni bir okuma başlat; eklenti eski okumana dokunmuyor."))
+            local dialog
+            dialog = ButtonDialog:new{
+                title = _("1000Kitap'ta bu kitap \"Okudum\" görünüyor; sayfa yalnızca \"Okuyorum\" olan kitapta güncellenir.\n\nNe yapayım?"),
+                title_align = "left",
+                buttons = {
+                    {{ text = _("Yeniden okuyorum: yeni okuma başlat"), callback = function()
+                        UIManager:close(dialog)
+                        NetworkMgr:runWhenOnline(function()
+                            local r, e = Api:yenidenOkumaBaslat(kitap.id)
+                            sonraGonder(r, e)
+                        end)
+                    end }},
+                    {{ text = _("\"Okudum\" yanlış: Okuyorum yap"), callback = function()
+                        UIManager:close(dialog)
+                        NetworkMgr:runWhenOnline(function()
+                            local r, e = Api:durumAyarla(kitap.id, Api.DURUM.okuyorum)
+                            sonraGonder(r, e)
+                        end)
+                    end }},
+                    {{ text = _("Vazgeç"), callback = function() UIManager:close(dialog) end }},
+                },
+            }
+            return UIManager:show(dialog)
         end
         UIManager:show(ConfirmBox:new{
             text = T(_("1000Kitap'ta bu kitap \"%1\" görünüyor; sayfa yalnızca \"Okuyorum\" olan kitapta güncellenir.\n\nOkuyorum yapıp sayfanı göndereyim mi?"),
                 Api.DURUM_ADI[m.durum] or tostring(m.durum)),
             ok_text = _("Okuyorum yap ve gönder"),
             ok_callback = function()
-                local r, e = Api:durumAyarla(kitap.id, Api.DURUM.okuyorum)
-                if not r then return self:hataGoster(e) end
-                if self.bkDurumKaydet then self:bkDurumKaydet(kitap.id, Api.DURUM.okuyorum) end
-                local m3, e3 = Api:okumaDurumu(kitap.id)
-                if not m3 then return self:hataGoster(e3) end
-                gonder(m3)
+                sonraGonder(Api:durumAyarla(kitap.id, Api.DURUM.okuyorum))
             end,
         })
     end)
@@ -2216,7 +2245,7 @@ function BinKitap:menuOgeleri()
         ogeler[#ogeler + 1] = {
             text = _("Sayfamı şimdi gönder"),
             callback = function() self:sayfamiGonder() end,
-            help_text = _("Kitapta kaçıncı sayfada olduğunu hemen 1000Kitap'a yazar ve sonucu söyler. Kitap orada \"Okuyorum\" değilse önce Okuyorum yapmayı önerir."),
+            help_text = _("Kitapta kaçıncı sayfada olduğunu hemen 1000Kitap'a yazar ve sonucu söyler. Kitap orada \"Okuyorum\" değilse önce Okuyorum yapmayı önerir; \"Okudum\" ise yeni bir okuma başlatmayı ya da durumu düzeltmeyi sorar."),
         }
         ogeler[#ogeler + 1] = { text = _("Puan ver"), callback = function() self:puanIstegi() end }
         if self.topluGonder then

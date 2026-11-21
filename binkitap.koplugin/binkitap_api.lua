@@ -662,6 +662,16 @@ function Api:durumAyarla(kitap_id, durum, tarih)
     }, nil, true)
 end
 
+--- Okudum olan kitapta yeni bir okuma başlatır (yeniden okuma): eski "Okudum" kaydı durur,
+-- bugünden başlayan yeni bir "Okuyorum" kaydı açılır. Sitenin okuma ekleme isteğiyle aynı biçim.
+function Api:yenidenOkumaBaslat(kitap_id)
+    return self:istek("GET", "kitaplar/kitapOku", {
+        { "id", kitap_id }, { "durum", Api.DURUM.okuyorum }, { "forceEkle", 1 },
+        { "okuyorTarihsaat", os.date("%d.%m.%Y %H:%M") },
+        { "isTopluIslem", 1 },
+    }, nil, true)
+end
+
 function Api:puanVer(kitap_id, puan)
     return self:istek("GET", "kitaplar/kitapPuanVer", {
         { "id", kitap_id }, { "puan", puan },

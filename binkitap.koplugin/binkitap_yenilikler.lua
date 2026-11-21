@@ -3,6 +3,12 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.2.2",
+        maddeler = {
+            "Sayfamı şimdi gönder artık 1000Kitap'ta Okudum olan kitapta da çalışıyor: \"Yeniden okuyorum\" dersen eski okuman durur, bugünden başlayan yeni bir okuma açılır; \"Okudum yanlış\" dersen durum Okuyorum'a çevrilir. Sonra sayfan gönderilir.",
+        },
+    },
+    {
         surum = "1.2.1",
         maddeler = {
             "Yeni: Sayfamı şimdi gönder (okurken menüde ve 1000Kitap ekranında Durum'da). Kaçıncı sayfada olduğunu hemen 1000Kitap'a yazar ve sonucu söyler; kitap orada Okuyorum değilse önce Okuyorum yapmayı önerir.",

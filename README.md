@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.2.1 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.2.2 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -103,7 +103,7 @@ Ekran hafızadaki bilgilerle hemen açılır, kendi başına internete çıkmaz;
 - **Bitiş ekranı:** Kitap bitince "Okudum", 1–10 puan ve inceleme tek ekranda.
 - **Okuma ilerlemesi ve seanslar:** Kaçıncı sayfada olduğunu ve okuma süreni gönderir. Ayar hiç seçilmediyse ilk kitap açılışında bir kez sorulur: kitabı kapatınca / uykuya geçince, her %10'da bir ya da gönderme (sonradan: **Ayarlar → Okuma ilerlemesi**). Sayfa yalnızca 1000Kitap'ta **Okuyorum** olan kitaba yazılır; okuman başka bir baskıdaysa o okumaya yazılır. Gönderilmezse sebebi **Hata günlüğü**'nde görünür.
   1000Kitap'ta "Okuduğun sayfa sayısını güncellerken yeni bir gönderi paylaşılsın mı?" ayarı açıksa her güncelleme herkese açık bir gönderi olur; istemiyorsan o ayarı sitede kapat.
-- **Sayfamı şimdi gönder:** Okurken menüde (ve 1000Kitap ekranında **Durum**'da). Sayfanı hemen gönderir ve sonucu söyler; kitap 1000Kitap'ta Okuyorum değilse önce Okuyorum yapmayı önerir (Okudum olan kitaba dokunmaz).
+- **Sayfamı şimdi gönder:** Okurken menüde (ve 1000Kitap ekranında **Durum**'da). Sayfanı hemen gönderir ve sonucu söyler; kitap 1000Kitap'ta Okuyorum değilse önce Okuyorum yapmayı önerir. **Okudum** olan kitapta sorar: **Yeniden okuyorum** (eski okuman durur, bugünden başlayan yeni bir okuma açılır) ya da **Okudum yanlış** (durum Okuyorum'a çevrilir). Kendiliğinden giden ilerleme Okudum olan kitaba dokunmaz; sebebi hata günlüğüne yazılır.
 
 ### Okuduklarını aktar
 
