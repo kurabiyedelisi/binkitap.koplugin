@@ -3,6 +3,13 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.2.3",
+        maddeler = {
+            "Güncelleme düzeltmesi: yeni bir sürüm yayınlandıktan hemen sonra güncellemeye basınca GitHub'ın önbelleği eski dosyaları verebiliyordu ve kurulum \"eksik indi\" diye yarıda kalıyordu. Artık dosyalar her zaman yayınlanan sürümün kendisinden indiriliyor.",
+            "Bir dosya tam inmezse ne yapman gerektiği yazıyor; eski ve yeni dosyalar hiçbir zaman karışık kurulmuyor.",
+        },
+    },
+    {
         surum = "1.2.2",
         maddeler = {
             "Sayfamı şimdi gönder artık 1000Kitap'ta Okudum olan kitapta da çalışıyor: \"Yeniden okuyorum\" dersen eski okuman durur, bugünden başlayan yeni bir okuma açılır; \"Okudum yanlış\" dersen durum Okuyorum'a çevrilir. Sonra sayfan gönderilir.",

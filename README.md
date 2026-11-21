@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.2.2 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.2.3 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -191,6 +191,7 @@ Güncellemede hesap bilgilerin, ayarların ve bekleyen gönderilerin korunur. Do
 | Toplu işler hemen gitmiyor | Bilerek böyle: arka planda yavaş yavaş gönderilir. Acelen varsa **Bekleyen gönderiler**'e dokun. |
 | Kütüphane eşleştirmesi yavaş | Bilerek böyle: cihazı kilitlememek için kitaplar arasında bekler. İstediğin an durdurup sonra devam edebilirsin. |
 | Kaçıncı sayfada olduğum 1000Kitap'ta güncellenmiyor | Okurken menüden **Sayfamı şimdi gönder**: ya gönderir ya da neden gönderemediğini söyler. Kendiliğinden gitmesi için **Ayarlar → Okuma ilerlemesi**'ni aç. Kitap 1000Kitap'ta **Okuyorum** olmalı. |
+| Güncelleme "eksik indi" ya da "tam inmedi" diye yarıda kaldı | Eklentin değişmedi, eski sürüm çalışmaya devam eder. Birkaç dakika bekleyip tekrar dene. 1.2.3 ve sonrasında yayından hemen sonra da sorunsuz iner. |
 | Gönderiler gitmiyor | Wi-Fi'yi aç ya da **Bekleyen gönderiler**'e dokun. Sebebini **Ayarlar → Hata günlüğü**'nde görebilirsin. |
 | Bir şey ters gitti, ne olduğunu anlamadım | **Ayarlar → Hata günlüğü → Göster.** Son 50 hata tarih, işlem ve sebebiyle durur; aynı hata art arda gelirse tek satırda sayılır. Sorun bildirirken buradakini yazman yeterli. |
 | Okuyacaklar listesi uzun sürüyor | Liste sayfa sayfa gelir; kaç kitabın geldiği ekranda görünür, dokununca durur. Liste 12 saat hatırlanır. |

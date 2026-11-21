@@ -18,10 +18,22 @@ local T = require("ffi/util").template
 local DEPO = "kurabiyedelisi/binkitap.koplugin"
 local DAL = "main"
 local KLASOR = "binkitap.koplugin"
-local LISTE_URL = "https://api.github.com/repos/" .. DEPO .. "/contents/" .. KLASOR .. "?ref=" .. DAL
-local HAM_URL = "https://raw.githubusercontent.com/" .. DEPO .. "/" .. DAL .. "/" .. KLASOR .. "/"
-local META_URL = HAM_URL .. "_meta.lua"
-local YENILIK_URL = HAM_URL .. "binkitap_yenilikler.lua"
+local API_URL = "https://api.github.com/repos/" .. DEPO
+local REF_URL = API_URL .. "/git/ref/heads/" .. DAL
+
+--- ref: commit kimliği (yoksa dal adı). GitHub'ın ham dosya önbelleği yeni bir
+--- yayından sonra birkaç dakika eski dosyaları verebiliyor; commit'e sabitlenmiş
+--- adresler ise her zaman o commit'in dosyalarını verir.
+local function adresler(ref)
+    ref = ref or DAL
+    local ham = "https://raw.githubusercontent.com/" .. DEPO .. "/" .. ref .. "/" .. KLASOR .. "/"
+    return {
+        liste = API_URL .. "/contents/" .. KLASOR .. "?ref=" .. ref,
+        ham = ham,
+        meta = ham .. "_meta.lua",
+        yenilik = ham .. "binkitap_yenilikler.lua",
+    }
+end
 local YENILIK_DOSYASI = "binkitap_yenilikler.lua"
 local DENETIM_ARALIGI = 7 * 24 * 3600
 local KORUNAN = { ["ayar.lua"] = true }
@@ -65,6 +77,15 @@ local function jsonCoz(metin)
     if not ok then json = require("rapidjson") end
     local ok_dec, veri = pcall(json.decode, metin)
     if ok_dec then return veri end
+end
+
+--- Dalın şu anki commit'i; bulunamazsa nil (o zaman dal adresleri kullanılır).
+local function sonCommit()
+    local metin = indir(REF_URL)
+    local veri = metin and jsonCoz(metin)
+    local sha = type(veri) == "table" and type(veri.object) == "table" and veri.object.sha
+    if type(sha) == "string" and #sha >= 7 and sha:match("^%x+$") then return sha end
+    logger.info("1000Kitap güncelleme: commit bulunamadı, dal adresleri kullanılacak")
 end
 
 local function surumBul(meta)
@@ -197,7 +218,7 @@ return function(BinKitap)
     end
 
     --- Depodaki dosya listesini indirir ve denetler; hepsi sağlamsa yerleştirir.
-    function BinKitap:guncellemeKur(yeni)
+    function BinKitap:guncellemeKur(yeni, sha)
         local bekle = self:bekle(T(_("1000Kitap %1 indiriliyor…"), yeni))
         local function bitir(hata)
             UIManager:close(bekle)
@@ -206,7 +227,8 @@ return function(BinKitap)
                 self:hataGoster(T(_("Güncelleme kurulamadı: %1\n\nEklentinin şu anki sürümü olduğu gibi duruyor."), hata))
             end
         end
-        local liste_metni, err = indir(LISTE_URL)
+        local adres = adresler(sha or sonCommit())
+        local liste_metni, err = indir(adres.liste)
         if not liste_metni then return bitir(err) end
         local liste = jsonCoz(liste_metni)
         if type(liste) ~= "table" or #liste == 0 then return bitir(_("Depodaki dosya listesi okunamadı.")) end
@@ -221,10 +243,10 @@ return function(BinKitap)
                 return bitir(T(_("Beklenmeyen dosya adı: %1"), ad))
             end
             if not KORUNAN[ad] then
-                local icerik, ierr = indir(oge.download_url)
+                local icerik, ierr = indir(adres.ham .. ad)
                 if not icerik then return bitir(ierr) end
                 if oge.size and tonumber(oge.size) ~= #icerik then
-                    return bitir(T(_("%1 eksik indi."), ad))
+                    return bitir(T(_("%1 tam inmedi. Bağlantı kesilmiş ya da GitHub dosyaları henüz yenilememiş olabilir; birkaç dakika sonra tekrar dene."), ad))
                 end
                 if ad:match("%.lua$") then
                     local derle = loadstring or load
@@ -237,6 +259,10 @@ return function(BinKitap)
         end
         if not meta_surumu or not dosyalar[1] then
             return bitir(_("İndirilen dosyalarda sürüm bilgisi yok."))
+        end
+        if not dahaYeni(meta_surumu, BinKitap.SURUM) then
+            -- dal adreslerine düşüldüyse önbellek eski dosyaları vermiş olabilir: karışık sürüm kurma
+            return bitir(_("GitHub henüz yeni sürümün dosyalarını vermiyor; birkaç dakika sonra tekrar dene."))
         end
         local dizin = self:eklentiDizini()
         if not dizin then return bitir(_("Eklenti klasörü bulunamadı.")) end
@@ -258,7 +284,9 @@ return function(BinKitap)
     function BinKitap:guncellemeDenetle(sessiz)
         local function denetle()
             local bekle = (not sessiz) and self:bekle(_("Güncelleme denetleniyor…")) or nil
-            local meta, err = indir(META_URL)
+            local sha = sonCommit()
+            local adres = adresler(sha)
+            local meta, err = indir(adres.meta)
             if bekle then UIManager:close(bekle) end
             self.settings:saveSetting("guncelleme_son_denetim", os.time())
             self.settings:flush()
@@ -285,13 +313,13 @@ return function(BinKitap)
                 return
             end
             -- Sürüm notlarının kısa bir özeti (indirilemezse olmadan sor)
-            local notlar = yeniliklerMetni(yenilikleriCoz(indir(YENILIK_URL)), BinKitap.SURUM, yeni, true)
+            local notlar = yeniliklerMetni(yenilikleriCoz(indir(adres.yenilik)), BinKitap.SURUM, yeni, true)
             UIManager:show(ConfirmBox:new{
                 text = T(_("1000Kitap eklentisinin yeni sürümü var: %1 (sendeki %2).\n\nŞimdi indirip kurayım mı? Ayarların, hesap bilgilerin ve bekleyen gönderilerin korunur."),
                     yeni, BinKitap.SURUM) .. (notlar and ("\n\n" .. _("Yenilikler:") .. "\n" .. notlar) or ""),
                 ok_text = _("Kur"),
                 cancel_text = _("Sonra"),
-                ok_callback = function() self:guncellemeKur(yeni) end,
+                ok_callback = function() self:guncellemeKur(yeni, sha) end,
             })
         end
         if sessiz then
