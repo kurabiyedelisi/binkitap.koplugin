@@ -399,11 +399,21 @@ function Api:okumaDurumu(kitap_id)
     end
     if durum == nil then durum = tonumber(m.okumaSayi) end
     local okuma_id = metin(yazi(m.okumaId))
+    local okuma_kitap_id
     if not okuma_id and type(m.okumalar) == "table" then
         for _i, o in ipairs(m.okumalar) do
             if type(o) == "table" and tostring(o.kitapId) == tostring(kitap_id) and o.id then
                 okuma_id = yazi(o.id)
                 break
+            end
+        end
+        -- Okuma başka bir baskıdaysa (eşleşen baskı farklı): o okumayı ve baskısını kullan
+        if not okuma_id then
+            for _i, o in ipairs(m.okumalar) do
+                if type(o) == "table" and o.id and o.kitapId then
+                    okuma_id, okuma_kitap_id = yazi(o.id), yazi(o.kitapId)
+                    break
+                end
             end
         end
     end
@@ -415,6 +425,7 @@ function Api:okumaDurumu(kitap_id)
         kitaplikta = kitaplikta,
         durum = durum or Api.DURUM.yok,
         okuma_id = okuma_id,
+        okuma_kitap_id = okuma_kitap_id,
         toplam_sayfa = tonumber(sv.sayfa),
         mevcut_sayfa = tonumber(sv.sayfa2),
         puan = tonumber(m.puan),

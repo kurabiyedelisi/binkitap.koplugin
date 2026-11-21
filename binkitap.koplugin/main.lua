@@ -227,7 +227,7 @@ local ISLEM_ADI = {
     ["uye/kitap/modalVeBasimlar"] = "Durum sorgusu", ["kitaplar/basimlar"] = "Baskılar",
     ["kitaplar/kitapCek"] = "Kitap bilgisi",
 }
-local HATA_TURU = { ag = "bağlantı", yetki = "oturum", sunucu = "1000Kitap reddetti" }
+local HATA_TURU = { ag = "bağlantı", yetki = "oturum", sunucu = "1000Kitap reddetti", atlandi = "gönderilmedi" }
 
 --- Günlüğe yazmadan önce hesap kodlarına benzeyen her şeyi gizle.
 local function kodlariGizle(m)
@@ -257,7 +257,7 @@ function BinKitap.hataKaydet(tur, yer, mesaj)
     end
     st:saveSetting("hata_gunlugu", g)
     -- Ağ hataları sık ve zararsız: diske her seferinde yazma
-    if tur ~= "ag" then st:flush() end
+    if tur ~= "ag" and tur ~= "atlandi" then st:flush() end
 end
 
 function BinKitap:hataSayisi()
@@ -1218,7 +1218,8 @@ end
 ---------------------------------------------------------------------------
 
 function BinKitap:ilerlemeSirala(kitap)
-    if kitap.otomatik then return end
+    -- Otomatik (onaylanmamış) eşleşmede de gönderilir: gönderirken kitabın 1000Kitap'ta
+    -- "Okuyorum" olması şart, yanlış eşleşmiş bir kitaba sayfa yazılmaz.
     local yuzde = self:mevcutYuzde()
     if not yuzde then return end
     self:siraya({ tur = "ilerleme", kitap_id = kitap.id, kitap_adi = kitap.adi,
@@ -1317,6 +1318,82 @@ local function sayfaHesapla(oge, m)
     return math.max(1, math.min(toplam, math.floor(oge.yuzde * toplam + 0.5))), toplam
 end
 
+BinKitap.sayfaHesapla = sayfaHesapla
+
+--- "Sayfamı şimdi gönder": okuduğun sayfayı hemen 1000Kitap'a yazar ve sonucu açıkça söyler.
+-- Kitap 1000Kitap'ta "Okuyorum" değilse (Okudum hariç) önce Okuyorum yapmayı önerir.
+function BinKitap:sayfamiGonder()
+    if not self.ui.document then return end
+    if not Api:kimlikVar() then return self:kimlikUyarisi() end
+    local kitap = self:kitapBilgisi()
+    if not kitap then return self:kitapEslestir(function() self:sayfamiGonder() end) end
+    local yuzde = self:mevcutYuzde()
+    if not yuzde then return self:hataGoster(_("Kitapta nerede olduğun hesaplanamadı.")) end
+    NetworkMgr:runWhenOnline(function()
+        local bekle = self:bekle(_("1000Kitap'taki durumun alınıyor…"))
+        local m, err = Api:okumaDurumu(kitap.id)
+        UIManager:close(bekle)
+        if not m then return self:hataGoster(err) end
+        local function gonder(m2)
+            if not m2.okuma_id then
+                return self:hataGoster(_("1000Kitap bu kitap için okuma kaydı döndürmedi, sayfa güncellenemedi. Sitede kitabın durumunu bir kez Okuyorum'a alıp tekrar dene."))
+            end
+            local sayfa, toplam = sayfaHesapla({ yuzde = yuzde, basili_sayfa = kitap.basili_sayfa }, m2)
+            if not sayfa then
+                return self:hataGoster(_("Kitabın sayfa sayısı bilinmiyor. Okurken menüden \"Baskıyı değiştir\" ile baskıyı seç."))
+            end
+            local bekle2 = self:bekle(_("Sayfan gönderiliyor…"))
+            local sonuc, err2 = Api:sayfaGuncelle(m2.okuma_kitap_id or kitap.id, m2.okuma_id, toplam, sayfa)
+            UIManager:close(bekle2)
+            if not sonuc then return self:hataGoster(err2) end
+            self:bildir(T(_("1000Kitap'ta sayfan güncellendi: s. %1 / %2"), sayfa, toplam))
+        end
+        if m.durum == Api.DURUM.okuyorum then return gonder(m) end
+        if m.durum == Api.DURUM.okudum then
+            return self:hataGoster(_("1000Kitap'ta bu kitap \"Okudum\" görünüyor; sayfa yalnızca \"Okuyorum\" olan kitapta güncellenir. Yeniden okuyorsan sitede yeni bir okuma başlat; eklenti eski okumana dokunmuyor."))
+        end
+        UIManager:show(ConfirmBox:new{
+            text = T(_("1000Kitap'ta bu kitap \"%1\" görünüyor; sayfa yalnızca \"Okuyorum\" olan kitapta güncellenir.\n\nOkuyorum yapıp sayfanı göndereyim mi?"),
+                Api.DURUM_ADI[m.durum] or tostring(m.durum)),
+            ok_text = _("Okuyorum yap ve gönder"),
+            ok_callback = function()
+                local r, e = Api:durumAyarla(kitap.id, Api.DURUM.okuyorum)
+                if not r then return self:hataGoster(e) end
+                if self.bkDurumKaydet then self:bkDurumKaydet(kitap.id, Api.DURUM.okuyorum) end
+                local m3, e3 = Api:okumaDurumu(kitap.id)
+                if not m3 then return self:hataGoster(e3) end
+                gonder(m3)
+            end,
+        })
+    end)
+end
+
+--- İlk kez bir kitap açılınca bir kez sorar: sayfa ilerlemesi 1000Kitap'a gitsin mi?
+function BinKitap:ilerlemeSor()
+    if self.settings:readSetting("ilerleme_modu") ~= nil or self.settings:isTrue("ilerleme_soruldu") then return end
+    self.settings:makeTrue("ilerleme_soruldu")
+    self.settings:flush()
+    local dialog
+    local function sec(kod, mesaj)
+        return function()
+            UIManager:close(dialog)
+            self.settings:saveSetting("ilerleme_modu", kod)
+            self.settings:flush()
+            if mesaj then self:bildir(mesaj, 3) end
+        end
+    end
+    dialog = ButtonDialog:new{
+        title = _("1000Kitap'ta kaçıncı sayfada olduğun güncellensin mi?\n\nKitap 1000Kitap'ta \"Okuyorum\" ise sayfan oraya yazılır. Not: sitede \"Okuduğun sayfa sayısını güncellerken yeni bir gönderi paylaşılsın mı?\" ayarın açıksa her güncelleme bir gönderi olur.\n\nSonradan: Ayarlar → Okuma ilerlemesi."),
+        title_align = "left",
+        buttons = {
+            {{ text = _("Kitabı kapatınca / uykuya geçince"), callback = sec("kapaninca", _("Sayfan kitabı kapatınca ve uykuya geçince 1000Kitap'a gidecek.")) }},
+            {{ text = _("Her %10'da bir"), callback = sec("yuzde10", _("Sayfan her %10'da bir 1000Kitap'a gidecek.")) }},
+            {{ text = _("Hayır, gönderme"), callback = sec("kapali") }},
+        },
+    }
+    UIManager:show(dialog)
+end
+
 --- Tek bir sıra öğesini gönderir. Dönüş: sonuç | nil, hata, tür
 function BinKitap:ogeGonder(oge)
     if oge.tur == "alinti" then
@@ -1394,14 +1471,23 @@ function BinKitap:ogeGonder(oge)
     elseif oge.tur == "ilerleme" or oge.tur == "seans" then
         local m, err, tur = Api:okumaDurumu(oge.kitap_id)
         if not m then return nil, err, tur end
-        if not m.okuma_id or m.durum ~= Api.DURUM.okuyorum then return { atlandi = true } end
+        local islem = oge.tur == "seans" and "Okuma seansı" or "İlerleme"
+        local function atla(sebep)
+            BinKitap.hataKaydet("atlandi", islem, T("%1: %2", oge.kitap_adi or oge.kitap_id, sebep))
+            return { atlandi = true, sebep = sebep }
+        end
+        if m.durum ~= Api.DURUM.okuyorum then
+            return atla(T(_("1000Kitap'ta \"%1\", sayfa yalnızca \"Okuyorum\" olan kitapta güncellenir"),
+                Api.DURUM_ADI[m.durum] or tostring(m.durum)))
+        end
+        if not m.okuma_id then return atla(_("1000Kitap okuma kaydını döndürmedi")) end
         local sayfa, toplam = sayfaHesapla(oge, m)
-        if not sayfa then return { atlandi = true } end
+        if not sayfa then return atla(_("kitabın sayfa sayısı bilinmiyor (baskıyı seç)")) end
         if oge.tur == "seans" then
             return Api:seansTamamla(m.okuma_id, sayfa, oge.sure, oge.istemci_kodu)
         end
         if m.mevcut_sayfa and sayfa <= m.mevcut_sayfa then return { atlandi = true } end
-        return Api:sayfaGuncelle(oge.kitap_id, m.okuma_id, toplam, sayfa)
+        return Api:sayfaGuncelle(m.okuma_kitap_id or oge.kitap_id, m.okuma_id, toplam, sayfa)
     end
     return { atlandi = true }
 end
@@ -1734,6 +1820,9 @@ function BinKitap:onReaderReady()
         end
         local function acilisIsleri(k)
             self:koDurumuKontrol()
+            if self.settings:readSetting("ilerleme_modu") == nil and not self.settings:isTrue("ilerleme_soruldu") then
+                UIManager:scheduleIn(3, function() if self.ui.document then self:ilerlemeSor() end end)
+            end
             if self.acilistaBkDurumu then self:acilistaBkDurumu(k) end
             if self.settings:nilOrTrue("acilista_okuyorum") and not k.okuyorum_islendi then
                 self:okuyorumSirala(k)
@@ -2123,6 +2212,11 @@ function BinKitap:menuOgeleri()
                 { text = _("Yarım bıraktım"), callback = function() self:durumIstegi(Api.DURUM.yarim) end },
                 { text = _("Okuyacağım"), callback = function() self:durumIstegi(Api.DURUM.okuyacagim) end },
             },
+        }
+        ogeler[#ogeler + 1] = {
+            text = _("Sayfamı şimdi gönder"),
+            callback = function() self:sayfamiGonder() end,
+            help_text = _("Kitapta kaçıncı sayfada olduğunu hemen 1000Kitap'a yazar ve sonucu söyler. Kitap orada \"Okuyorum\" değilse önce Okuyorum yapmayı önerir."),
         }
         ogeler[#ogeler + 1] = { text = _("Puan ver"), callback = function() self:puanIstegi() end }
         if self.topluGonder then

@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.2.0 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.2.1 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -101,8 +101,9 @@ Ekran hafızadaki bilgilerle hemen açılır, kendi başına internete çıkmaz;
 - **Okuma durumu:** Kitabı açınca "Okuyorum" olur; daha önce okuduğun kitaba dokunulmaz. KOReader'da kitabı Bitti, Beklemede ya da Okunuyor yaparsan 1000Kitap'a da yansır.
 - **Ters yön:** Durumu 1000Kitap'ta (sitede ya da telefonda) değiştirdiysen, kitabı Kobo'da açınca KOReader'daki durumu da değiştirmeyi önerir: Okudum → Bitti, Yarım bıraktım → Beklemede, Okuyorum → Okunuyor. Kapatmak için: **Ayarlar → 1000Kitap'taki değişiklikleri KOReader'a yansıt.**
 - **Bitiş ekranı:** Kitap bitince "Okudum", 1–10 puan ve inceleme tek ekranda.
-- **Okuma ilerlemesi ve seanslar** (varsayılan kapalı): Sayfanı ve okuma süreni gönderir.
-  1000Kitap'ta "Okuduğun sayfa sayısını güncellerken yeni bir gönderi paylaşılsın mı?" ayarı açıksa her güncelleme herkese açık bir gönderi olur; açmadan önce o ayarı sitede kapat.
+- **Okuma ilerlemesi ve seanslar:** Kaçıncı sayfada olduğunu ve okuma süreni gönderir. Ayar hiç seçilmediyse ilk kitap açılışında bir kez sorulur: kitabı kapatınca / uykuya geçince, her %10'da bir ya da gönderme (sonradan: **Ayarlar → Okuma ilerlemesi**). Sayfa yalnızca 1000Kitap'ta **Okuyorum** olan kitaba yazılır; okuman başka bir baskıdaysa o okumaya yazılır. Gönderilmezse sebebi **Hata günlüğü**'nde görünür.
+  1000Kitap'ta "Okuduğun sayfa sayısını güncellerken yeni bir gönderi paylaşılsın mı?" ayarı açıksa her güncelleme herkese açık bir gönderi olur; istemiyorsan o ayarı sitede kapat.
+- **Sayfamı şimdi gönder:** Okurken menüde (ve 1000Kitap ekranında **Durum**'da). Sayfanı hemen gönderir ve sonucu söyler; kitap 1000Kitap'ta Okuyorum değilse önce Okuyorum yapmayı önerir (Okudum olan kitaba dokunmaz).
 
 ### Okuduklarını aktar
 
@@ -189,6 +190,7 @@ Güncellemede hesap bilgilerin, ayarların ve bekleyen gönderilerin korunur. Do
 | Kitap yanlış baskıyla eşleşmiş | Okurken **Baskıyı değiştir**, ya da dosyaya uzun bas → **Eşleşmeyi değiştir.** |
 | Toplu işler hemen gitmiyor | Bilerek böyle: arka planda yavaş yavaş gönderilir. Acelen varsa **Bekleyen gönderiler**'e dokun. |
 | Kütüphane eşleştirmesi yavaş | Bilerek böyle: cihazı kilitlememek için kitaplar arasında bekler. İstediğin an durdurup sonra devam edebilirsin. |
+| Kaçıncı sayfada olduğum 1000Kitap'ta güncellenmiyor | Okurken menüden **Sayfamı şimdi gönder**: ya gönderir ya da neden gönderemediğini söyler. Kendiliğinden gitmesi için **Ayarlar → Okuma ilerlemesi**'ni aç. Kitap 1000Kitap'ta **Okuyorum** olmalı. |
 | Gönderiler gitmiyor | Wi-Fi'yi aç ya da **Bekleyen gönderiler**'e dokun. Sebebini **Ayarlar → Hata günlüğü**'nde görebilirsin. |
 | Bir şey ters gitti, ne olduğunu anlamadım | **Ayarlar → Hata günlüğü → Göster.** Son 50 hata tarih, işlem ve sebebiyle durur; aynı hata art arda gelirse tek satırda sayılır. Sorun bildirirken buradakini yazman yeterli. |
 | Okuyacaklar listesi uzun sürüyor | Liste sayfa sayfa gelir; kaç kitabın geldiği ekranda görünür, dokununca durur. Liste 12 saat hatırlanır. |

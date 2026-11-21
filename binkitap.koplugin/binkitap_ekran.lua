@@ -688,6 +688,7 @@ return function(BinKitap)
                     { text = _("İncelemeler"), callback = function() self:populerIncelemeler() end },
                     { text = _("Durum"), callback = function()
                         self:menudenDiyalog(_("Okuma durumu"), {
+                            { text = _("Sayfamı şimdi gönder"), callback = function() self:sayfamiGonder() end },
                             { text = _("Okuyorum"), callback = function() self:durumIstegi(Api.DURUM.okuyorum) end },
                             { text = _("Okudum"), callback = function() self:durumIstegi(Api.DURUM.okudum) end },
                             { text = _("Yarım bıraktım"), callback = function() self:durumIstegi(Api.DURUM.yarim) end },

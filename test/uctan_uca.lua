@@ -188,14 +188,17 @@ YANIT["kitaplar/basimlar"] = function(r)
   end
   return { _sonuc = { hasMore = sayfa == 1, kume = 4973230052879385, z = 10, sayfa = sayfa, liste = liste }, bilgi = 1 }
 end
+rawset(_G, "baska_baski", {})  -- [kitap_id] = okumanın olduğu başka baskının kimliği (yerel sayı sınırı yüzünden global)
 YANIT["uye/kitap/modalVeBasimlar"] = function(r)
   if not kimlikli(r) then return giris_hatasi() end
   local id = r.q.kitapId
   local d = durum[id] or -1
   local k = KITAPLAR[id] or { sayfa = 100 }
+  local bb = baska_baski[id]
   return { _sonuc = {
     basimlar = { { id = id, okumaDurumuButon = { yazi = "x", durum = "0", okumaDurumu = d } } },
-    modal = { okumaSayi = tostring(d), okumaId = (d >= 0) and ("OK" .. id) or "", okumalar = {}, kutuphaneDurum = kitaplikta(id),
+    modal = { okumaSayi = tostring(d), okumaId = (d >= 0 and not bb) and ("OK" .. id) or "",
+      okumalar = bb and { { id = "OK" .. bb, kitapId = bb } } or {}, kutuphaneDurum = kitaplikta(id),
       sayfaVeri = { sayfa = tostring(k.sayfa), sayfa2 = tostring(sayfa2[id] or 0) }, puan = puan[id] or 0 },
   }, bilgi = 1 }
 end
@@ -1142,16 +1145,16 @@ fm.settings:saveSetting("kitapliga_ekle", nil)
 do
 print("28) GitHub'dan güncelleme")
 local G = Plugin._guncelleme
-kontrol(Plugin.SURUM == "1.2.0", "sürüm _meta.lua'dan okundu: " .. tostring(Plugin.SURUM))
-kontrol(G.dahaYeni("1.2.10", "1.2.9") and G.dahaYeni("1.3", "1.2.9") and not G.dahaYeni("1.2.3", "1.2.3")
-  and not G.dahaYeni("1.2.2", "1.2.3"), "sürüm karşılaştırma sayıyla yapılıyor")
+kontrol(Plugin.SURUM == "1.2.1", "sürüm _meta.lua'dan okundu: " .. tostring(Plugin.SURUM))
+kontrol(G.dahaYeni("1.2.20", "1.2.9") and G.dahaYeni("1.3", "1.2.9") and not G.dahaYeni("1.2.4", "1.2.4")
+  and not G.dahaYeni("1.2.3", "1.2.4"), "sürüm karşılaştırma sayıyla yapılıyor")
 local ayar_ogeleri = fm:ayarlarMenusu()
 local gun_oge, oto_oge
 for _, o in ipairs(ayar_ogeleri) do
   if o.text and o.text:find("^Güncellemeleri denetle") then gun_oge = o end
   if o.text == "Haftada bir kendiliğinden denetle" then oto_oge = o end
 end
-kontrol(gun_oge and gun_oge.text == "Güncellemeleri denetle (sürüm 1.2.0)" and oto_oge and oto_oge.checked_func(),
+kontrol(gun_oge and gun_oge.text == "Güncellemeleri denetle (sürüm 1.2.1)" and oto_oge and oto_oge.checked_func(),
   "ayarlarda denetle düğmesi ve varsayılan açık haftalık denetim")
 
 local DIZ = GERCEK .. "/binkitap.koplugin"
@@ -1159,7 +1162,7 @@ gercek_lfs.mkdir(GERCEK); gercek_lfs.mkdir(DIZ)
 local function yaz(yol, m) local h = assert(io.open(yol, "wb")); h:write(m); h:close() end
 local function oku(yol) local h = io.open(yol, "rb"); if not h then return nil end; local m = h:read("*a"); h:close(); return m end
 yaz(DIZ .. "/main.lua", "-- eski main\n")
-yaz(DIZ .. "/_meta.lua", 'return { version = "1.2.0" }\n')
+yaz(DIZ .. "/_meta.lua", 'return { version = "1.2.1" }\n')
 yaz(DIZ .. "/ayar.lua", 'return { oturum_kodu = "GIZLI" }\n')
 fm.path = DIZ
 
@@ -1180,59 +1183,59 @@ local function depoKur(surum, dosyalar, bozuk)
   GITHUB[LISTE] = encode(liste)
 end
 
-depoKur("1.2.0", { ["main.lua"] = "-- aynı\n" })
+depoKur("1.2.1", { ["main.lua"] = "-- aynı\n" })
 fm:guncellemeDenetle(false)
-kontrol(son("InfoMessage").text == "En son sürümü kullanıyorsun (1.2.0).", "güncel: " .. son("InfoMessage").text)
+kontrol(son("InfoMessage").text == "En son sürümü kullanıyorsun (1.2.1).", "güncel: " .. son("InfoMessage").text)
 kontrol(fm.settings:readSetting("guncelleme_son_denetim") == os.time(), "denetim zamanı kaydedildi")
 
 GITHUB[HAM .. "_meta.lua"] = 503
 fm:guncellemeDenetle(false)
 kontrol(son("InfoMessage").text:find("HTTP 503", 1, true) ~= nil, "hata gösterildi: " .. son("InfoMessage").text)
 
-depoKur("1.2.1", { ["main.lua"] = "-- yeni main\nreturn 1\n", ["binkitap_yeni.lua"] = "return {}\n", ["ayar.lua"] = "return { oturum_kodu = \"SIFIRLANDI\" }\n",
-  ["binkitap_yenilikler.lua"] = 'return { { surum = "1.2.1", maddeler = { "Yeni şey bir", "Yeni şey iki" } }, { surum = "1.2.0", maddeler = { "Eski şey" } } }\n' })
+depoKur("1.2.2", { ["main.lua"] = "-- yeni main\nreturn 1\n", ["binkitap_yeni.lua"] = "return {}\n", ["ayar.lua"] = "return { oturum_kodu = \"SIFIRLANDI\" }\n",
+  ["binkitap_yenilikler.lua"] = 'return { { surum = "1.2.2", maddeler = { "Yeni şey bir", "Yeni şey iki" } }, { surum = "1.2.1", maddeler = { "Eski şey" } } }\n' })
 fm:guncellemeDenetle(false)
 local gk = son("ConfirmBox")
-kontrol(gk and gk.text:find("yeni sürümü var: 1.2.1 (sendeki 1.2.0)", 1, true) ~= nil, "yeni sürüm soruldu")
+kontrol(gk and gk.text:find("yeni sürümü var: 1.2.2 (sendeki 1.2.1)", 1, true) ~= nil, "yeni sürüm soruldu")
 kontrol(gk.text:find("Yenilikler:\n• Yeni şey bir\n• Yeni şey iki", 1, true) and not gk.text:find("Eski şey", 1, true),
   "onay penceresinde yalnızca yeni sürümün notları: " .. gk.text:gsub("\n", " / "))
 gk.ok_callback()
 kontrol(oku(DIZ .. "/main.lua") == "-- yeni main\nreturn 1\n" and oku(DIZ .. "/binkitap_yeni.lua") == "return {}\n"
-  and oku(DIZ .. "/_meta.lua"):find("1.2.1", 1, true), "yeni dosyalar yerinde")
+  and oku(DIZ .. "/_meta.lua"):find("1.2.2", 1, true), "yeni dosyalar yerinde")
 kontrol(oku(DIZ .. "/ayar.lua") == 'return { oturum_kodu = "GIZLI" }\n', "ayar.lua'ya dokunulmadı")
 local ayar_istendi = false
 for _, r in ipairs(istekler) do if r.url == HAM .. "ayar.lua" then ayar_istendi = true end end
 kontrol(not ayar_istendi, "depodaki ayar.lua indirilmedi bile")
 kontrol(oku(DIZ .. "/.yedek/main.lua") == "-- eski main\n", "eski sürüm .yedek'te")
 kontrol(gercek_lfs.attributes(DIZ .. "/.guncelleme/main.lua", "mode") == nil, "geçici klasörde dosya kalmadı")
-kontrol(son("Restart") and son("Restart").text:find("1.2.1", 1, true), "yeniden başlatma istendi")
-kontrol(fm.settings:readSetting("guncelleme_kurulan") == "1.2.1", "kurulan sürüm kaydedildi")
+kontrol(son("Restart") and son("Restart").text:find("1.2.2", 1, true), "yeniden başlatma istendi")
+kontrol(fm.settings:readSetting("guncelleme_kurulan") == "1.2.2", "kurulan sürüm kaydedildi")
 fm:guncellemeDenetle(false)
-kontrol(son("InfoMessage").text:find("1.2.1 zaten indirildi", 1, true) ~= nil, "yeniden başlatmadan önce tekrar sormuyor")
+kontrol(son("InfoMessage").text:find("1.2.2 zaten indirildi", 1, true) ~= nil, "yeniden başlatmadan önce tekrar sormuyor")
 
 local once_main = oku(DIZ .. "/main.lua")
-depoKur("1.2.2", { ["main.lua"] = "bu lua değil (\n" })
-fm:guncellemeKur("1.2.2")
+depoKur("1.2.3", { ["main.lua"] = "bu lua değil (\n" })
+fm:guncellemeKur("1.2.3")
 kontrol(son("InfoMessage").text:find("main.lua bozuk", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "bozuk dosya: hiçbir şey değişmedi")
-depoKur("1.2.2", { ["main.lua"] = "return 2\n" }, { boyut = "main.lua" })
-fm:guncellemeKur("1.2.2")
+depoKur("1.2.3", { ["main.lua"] = "return 2\n" }, { boyut = "main.lua" })
+fm:guncellemeKur("1.2.3")
 kontrol(son("InfoMessage").text:find("eksik indi", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "eksik indirme: hiçbir şey değişmedi")
-depoKur("1.2.2", { ["main.lua"] = "return 2\n", ["resimler"] = "x" }, { klasor = "resimler" })
-fm:guncellemeKur("1.2.2")
+depoKur("1.2.3", { ["main.lua"] = "return 2\n", ["resimler"] = "x" }, { klasor = "resimler" })
+fm:guncellemeKur("1.2.3")
 kontrol(son("InfoMessage").text:find("elle kurulmalı", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "yeni klasör içeren sürüm otomatik kurulmadı")
 
 -- haftalık sessiz denetim
-depoKur("1.2.3", { ["main.lua"] = "return 3\n" })
+depoKur("1.2.4", { ["main.lua"] = "return 3\n" })
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 2 * 24 * 3600)
 fm:onNetworkConnected(); calistir()
-kontrol(son("ConfirmBox") == gk or not son("ConfirmBox").text:find("1.2.3", 1, true), "iki gün önce denetlendiyse sormadı")
+kontrol(son("ConfirmBox") == gk or not son("ConfirmBox").text:find("1.2.4", 1, true), "iki gün önce denetlendiyse sormadı")
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 8 * 24 * 3600)
 fm:onNetworkConnected(); fm2:onNetworkConnected(); calistir()
 local sorular = 0
-for _, w in ipairs(gosterilen) do if w._tur == "ConfirmBox" and w.text:find("1.2.3", 1, true) then sorular = sorular + 1 end end
+for _, w in ipairs(gosterilen) do if w._tur == "ConfirmBox" and w.text:find("1.2.4", 1, true) then sorular = sorular + 1 end end
 kontrol(sorular == 1, "bir hafta geçince bir kez sordu (iki örnek açıkken bile)")
 kontrol(son("ConfirmBox").cancel_text == "Sonra", "sormadan kurmuyor")
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 8 * 24 * 3600)
@@ -2139,6 +2142,62 @@ kontrol(e2 ~= nil, "ana menüden açıldı")
 e2:onClose()
 package.preload["features/sui_quickactions"] = nil
 package.loaded["features/sui_quickactions"] = nil
+end
+
+do
+print("46) Sayfa ilerlemesi")
+local k = p:kitapBilgisi()
+-- Okuyorum: hemen gönderir
+durum[k.id] = 2; sayfa2[k.id] = 0
+p:sayfamiGonder(); calistir()
+kontrol((sayfa2[k.id] or 0) > 0 and son("InfoMessage").text:find("1000Kitap'ta sayfan güncellendi: s. " .. sayfa2[k.id] .. " / ", 1, true),
+  "Okuyorum'da sayfa gönderildi: " .. son("InfoMessage").text)
+-- Okuyacağım: önce Okuyorum yapmayı önerir
+durum[k.id] = 0; sayfa2[k.id] = 0
+p:sayfamiGonder(); calistir()
+local cb = son("ConfirmBox")
+kontrol(cb and cb.text:find("\"Okuyacağım\" görünüyor", 1, true) and cb.ok_text == "Okuyorum yap ve gönder", "Okuyorum yapmayı önerdi")
+cb.ok_callback(); calistir()
+kontrol(durum[k.id] == 2 and sayfa2[k.id] > 0, "Okuyorum yapıldı ve sayfa gönderildi")
+-- Okuma başka baskıdaysa o okumaya yazılır
+durum[k.id] = 2; durum["555"] = 2; baska_baski[k.id] = "555"; sayfa2["555"] = 0
+p:sayfamiGonder(); calistir()
+kontrol(sayfa2["555"] > 0 and son("InfoMessage").text:find("sayfan güncellendi", 1, true), "başka baskıdaki okumaya yazıldı")
+baska_baski[k.id] = nil
+-- Okudum: dokunmaz, sebebini söyler
+durum[k.id] = 1; sayfa2[k.id] = 0
+p:sayfamiGonder(); calistir()
+kontrol(sayfa2[k.id] == 0 and son("InfoMessage").text:find("\"Okudum\" görünüyor", 1, true), "Okudum'a dokunmadı, sebebini söyledi")
+-- Sıradaki ilerleme atlanırsa sebebi günlükte
+p.settings:delSetting("hata_gunlugu")
+durum[k.id] = 0
+p:siraya({ tur = "ilerleme", kitap_id = k.id, kitap_adi = k.adi, yuzde = 0.4, basili_sayfa = k.basili_sayfa })
+p:kuyruguGonder(true); calistir()
+local gm = p:hataGunluguMetni()
+kontrol(gm:find("İlerleme · gönderilmedi", 1, true) and gm:find("sayfa yalnızca \"Okuyorum\"", 1, true), "atlanan ilerlemenin sebebi günlükte: " .. gm:gsub("\n", " / "))
+p.settings:delSetting("hata_gunlugu")
+-- Otomatik eşleşmede de ilerleme sıraya girer
+local once = #p:kuyruk()
+k.otomatik = true
+p:ilerlemeSirala(k)
+kontrol(#p:kuyruk() == once + 1, "otomatik eşleşmede ilerleme sıraya girdi (Okuyorum şartıyla)")
+k.otomatik = nil
+p.settings:saveSetting("kuyruk", {})
+-- İlk açılışta bir kez sorulur
+p.settings:delSetting("ilerleme_modu"); p.settings:delSetting("ilerleme_soruldu")
+p:ilerlemeSor()
+local sd = son("ButtonDialog")
+kontrol(sd.title:find("kaçıncı sayfada olduğun güncellensin mi", 1, true) and sd.buttons[1][1].text == "Kitabı kapatınca / uykuya geçince", "ilerleme sorusu")
+sd.buttons[1][1].callback()
+kontrol(p.settings:readSetting("ilerleme_modu") == "kapaninca", "seçim kaydedildi")
+local n = #gosterilen
+p.settings:delSetting("ilerleme_modu")
+p:ilerlemeSor()
+kontrol(#gosterilen == n, "bir daha sorulmadı")
+p.settings:saveSetting("ilerleme_modu", "kapaninca")
+local menu_metin = {}
+for _, o in ipairs(p:menuOgeleri()) do menu_metin[#menu_metin + 1] = o.text or "" end
+kontrol(table.concat(menu_metin, "|"):find("Sayfamı şimdi gönder", 1, true), "okuyucu menüsünde")
 end
 
 print("20) Menüler hatasız kuruluyor")

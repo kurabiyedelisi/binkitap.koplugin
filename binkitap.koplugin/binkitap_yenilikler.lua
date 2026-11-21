@@ -3,6 +3,16 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.2.1",
+        maddeler = {
+            "Yeni: Sayfamı şimdi gönder (okurken menüde ve 1000Kitap ekranında Durum'da). Kaçıncı sayfada olduğunu hemen 1000Kitap'a yazar ve sonucu söyler; kitap orada Okuyorum değilse önce Okuyorum yapmayı önerir.",
+            "Sayfa ilerlemesi ayarı hiç seçilmediyse, kitap açınca bir kez sorulur (kitabı kapatınca / her %10'da / gönderme).",
+            "Okuman 1000Kitap'ta başka bir baskıdaysa sayfa artık o okumaya yazılıyor; önceden sessizce atlanıyordu.",
+            "Otomatik (henüz onaylanmamış) eşleşmelerde de sayfa gidiyor; yanlış kitaba yazılmasın diye kitabın 1000Kitap'ta Okuyorum olması şart.",
+            "Sayfa gönderilmediğinde sebebi hata günlüğüne yazılıyor (ör. kitap 1000Kitap'ta Okuyorum değil).",
+        },
+    },
+    {
         surum = "1.2.0",
         maddeler = {
             "SimpleUI kullanıyorsan: 1000Kitap, Ne okusam?, Okuyacaklara ekle ve Kitap listeleri artık SimpleUI'nin Hızlı İşlemleri arasında. Gezinme çubuğuna sekme olarak, Ana ekrandaki Hızlı İşlemler modülüne ya da Hızlı Ayarlar çubuğuna ekleyebilirsin.",
