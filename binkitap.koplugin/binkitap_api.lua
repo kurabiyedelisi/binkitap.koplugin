@@ -677,13 +677,24 @@ function Api:durumAyarla(kitap_id, durum, tarih)
 end
 
 --- Okudum olan kitapta yeni bir okuma başlatır (yeniden okuma): eski "Okudum" kaydı durur,
--- bugünden başlayan yeni bir "Okuyorum" kaydı açılır. Sitenin okuma ekleme isteğiyle aynı biçim.
+-- bugünden başlayan yeni bir "Okuyorum" kaydı açılır (sitede 2. okuma). Sitenin okuma ekleme
+-- isteğiyle aynı biçim; düz "durum=Okuyorum" isteği ise eski okumayı Okuyorum'a çevirir.
+-- Gönderdikten sonra durumu yeniden okur: Okuyorum olmadıysa hata döner.
 function Api:yenidenOkumaBaslat(kitap_id)
-    return self:istek("GET", "kitaplar/kitapOku", {
+    local r, err, tur = self:istek("GET", "kitaplar/kitapOku", {
         { "id", kitap_id }, { "durum", Api.DURUM.okuyorum }, { "forceEkle", 1 },
         { "okuyorTarihsaat", os.date("%d.%m.%Y %H:%M") },
         { "isTopluIslem", 1 },
     }, nil, true)
+    if not r then return nil, err, tur end
+    local m = self:okumaDurumu(kitap_id)
+    if m and m.durum ~= Api.DURUM.okuyorum then
+        local hata = ("1000Kitap yeni okumayı başlatmadı (durum: %s)."):format(
+            Api.DURUM_ADI[m.durum] or tostring(m.durum))
+        if self.gunluk then pcall(self.gunluk, "sunucu", "kitaplar/kitapOku", hata) end
+        return nil, hata, "sunucu"
+    end
+    return r
 end
 
 function Api:puanVer(kitap_id, puan)

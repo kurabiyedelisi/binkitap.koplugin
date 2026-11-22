@@ -3,6 +3,15 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.6",
+        maddeler = {
+            "Yeniden okuma: 1000Kitap'ta \"Okudum\" olan bir kitabı yeniden okumaya başlayınca eski okuman artık bozulmuyor; 1000Kitap'ta yeni bir okuma (2. okuma gibi) başlıyor. Kitabı açınca ya da sayfan gönderilirken bir kez \"Yeniden mi okuyorsun?\" diye sorar. \"Hayır, sadece bakıyorum\" dersen o kitap için 30 gün sormaz.",
+            "Menüden elle \"Okuyorum\" seçersen de eski okuma Okuyorum'a çevrilmiyor, yeni okuma açılıyor. Yeni okumanın sonunda bitiş ekranı yine çıkar.",
+            "KOReader'daki durum değişince (Beklemede, Okunacak) \"Okudum\" olan kitaba kendiliğinden dokunulmuyor.",
+            "Ayarlar > \"Okunmuş kitabı yeniden açınca\": Sor (önerilen), Sormadan yeni okuma başlat ya da Dokunma.",
+        },
+    },
+    {
         surum = "1.3.5",
         maddeler = {
             "Yinelenen alıntıları temizle (1000Kitap menüsünde): profilindeki Alıntılar bölümünü okur, aynı kitapta aynı metne sahip alıntılardan ilk gönderileni bırakıp sonrakileri, sayısını ve listesini gösterip onaylarsan siler. Yavaş çalışır; 1000Kitap yoğunsa ya da bir hata olursa durur. İlk silmeden sonra doğru alıntının gittiğini kontrol eder, tutmazsa başka hiçbir şeyi silmez.",
