@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.2.3 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.3.0 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -19,6 +19,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 - **1000Kitap kitaplığını yönetir.** Kobo'daki kitapları kitaplığına seçerek ekler, seçtiklerini çıkarır.
 - **Okuyacaklar listeni doldurur.** Kobo'daki kitaplarından seçerek ya da 1000Kitap'ta arayarak "Okuyacağım" listene ekler.
 - **Keşfetmene yardım eder.** Ne okusam?, sitenin kitap listeleri (sana özel öneriler, son 7 günün en çok okunanları…), Okuyacaklarım koleksiyonu, popüler alıntılar ve incelemeler, okuma hedefi var. Listelerde her kitabın 1000Kitap puanı görünür. "Okudum"dan sonra hedefinde nerede olduğunu söyler. Uyku ekranında kendi alıntılarından birini ve hedef ilerlemeni gösterebilir.
+- **Kobo'nun kendi okuyucusundaki notlarını getirir (Kobo Senkron).** Kobo okuyucusunda yaptığın vurgular, notlar ve yer imleri KOReader'a gelir. Okuma ilerlemesi eşleşir, Kobo listelerin KOReader koleksiyonu olur.
 - **İnternet olmadan da çalışır.** Wi-Fi kapalıyken yaptıkların sıraya girer, bağlanınca gönderilir.
 - **Kendini günceller.** Yeni sürüm çıktığında neler değiştiğiyle birlikte sorar, onay verirsen kurar.
 
@@ -164,6 +165,20 @@ Yazdığın metin taslak olarak saklanır: pencereyi kapatsan da, 1000Kitap ilet
 - **Okuma hedefi:** Bu yılın hedefini gösterir ya da belirlersin. Bir kitap "Okudum" olunca kısa bir bildirimle hedefinde nerede olduğunu söyler ("50 kitaptan 23'ü; 27 kitap kaldı, yıl sonuna 6 hafta var"). Kapatmak için: **Ayarlar → "Okudum"dan sonra hedef ilerlemesini göster.**
 - **Uyku ekranı** (Ayarlar): **Alıntılarımdan biri** kendi alıntılarından birini, **Okuma hedefi ilerlemesi** "2026 hedefi: 23 / 50 kitap" satırını uyku ekranında gösterir. İkisi birlikte de açılabilir; ikisini de kapatınca eski uyku ekranı mesajın geri gelir.
 
+### Kobo Senkron
+
+Kobo'nun kendi okuyucusunda (Nickel) yaptıklarını KOReader'a aktarır. Önceden ayrı bir eklentiydi (`kobosync.koplugin`), artık 1000Kitap'ın içinde. Yalnızca Kobo cihazında görünür.
+
+- **Vurgular ve notlar** KOReader'da gerçek vurgu ve not olur. Vurgulanan metin kitapta aranarak yerleştirilir; aynı ifade birkaç kez geçiyorsa Kobo'nun kaydettiği bölüm ve konum kullanılır.
+- **Kobo yer imleri** (köşe kıvırma) KOReader'da yer imi olur. Kitapta tam yeri bulunamayan bir vurgu, yaklaşık konumuna not içeren yer imi olarak eklenir; hiçbir not kaybolmaz.
+- **Okuma ilerlemesi** ve "bitti" durumu aktarılır; kitabı en son hangi okuyucuda okuduysan o geçerli olur. Açık kitapta Kobo'da daha ileride kaldıysan oraya gitmeyi önerir.
+- **Kobo listelerin** KOReader koleksiyonu olur. Kobo'da vurgu yaptığın bütün kitaplar "Kobo vurgu ve notları" koleksiyonunda toplanır.
+- **Kendiliğinden çalışır:** Dosya tarayıcısı açılınca Kobo'da bir şey değiştiyse tarar; kitap açılınca o kitabın yeni notlarını ekler. Ekrana dokunursan durur, kalanlar kitabı açınca eklenir.
+- **Nereden:** **1000Kitap → Kobo Senkron** (Şimdi senkronize et, Kobo'da notlu kitaplar, Koleksiyonlar, Ayarlar). 1000Kitap ekranının Kütüphane bölümünde **Kobo'dan aktar** ve **Kobo notları**. SimpleUI'de **Kobo** düğmesi.
+- Aktarım tek yönlüdür (Kobo → KOReader); Kobo'nun veritabanına hiçbir şey yazılmaz. Bir kez aktarılan not, KOReader'da silsen de tekrar eklenmez. Kobo'da ve KOReader'da aynı dosya okunmalıdır; Kobo mağazasından alınmış şifreli kitaplar ve kalemle yapılan çizimler aktarılamaz.
+- **Kobo'dan gelen vurgular 1000Kitap'a kendiliğinden gönderilmez,** renk kuralına uysalar bile. Göndermek istediklerini okurken **Bu kitabın vurgularını gönder** ile seçebilirsin.
+- **Eski Kobo Senkron eklentisini kullanıyorduysan:** ayarların, aktarılmış notların, hareketlerin ve SimpleUI'deki Kobo düğmen aynen çalışır. Eski eklenti hâlâ açıksa, ikisi aynı işi yapmasın diye Kobo işlerini o yapar ve 1000Kitap onu kapatmayı önerir. Kapatınca `koreader/plugins/kobosync.koplugin` klasörünü silebilirsin.
+
 ### Kısayollar ve çevrimdışı kullanım
 
 - Wi-Fi kapalıyken yaptığın her şey sıraya girer.
@@ -171,7 +186,7 @@ Yazdığın metin taslak olarak saklanır: pencereyi kapatsan da, 1000Kitap ilet
 - **Bekleyen gönderiler** menüde kaç iş kaldığını ve arka planda gönderim sürüyorsa bunu gösterir. Dokununca beklemeden hepsini hemen gönderir, basılı tutunca sırayı temizler.
 - **Uykuya geçerken gönderim:** Cihaz uykuya geçerken Wi-Fi açıksa sıradaki birkaç iş (en fazla 5, en fazla 8 saniye) hemen gönderilir. Kalanlar cihaz uyanınca ya da Wi-Fi bağlanınca sürer. **Ayarlar → Uykuya geçerken bekleyenleri gönder** ile kapatılabilir.
 - **İhtiyaç anında Wi-Fi** açıksa kitabı kapattığında Wi-Fi'yi açar, gönderir, kapatır.
-- KOReader'ın hareket ayarlarında beş eylem var: **1000Kitap: ekranı aç**, **1000Kitap: bekleyenleri gönder**, **1000Kitap: Okuyacaklarıma ekle**, **1000Kitap: ileti yaz**, **1000Kitap: ne okusam?**
+- KOReader'ın hareket ayarlarında beş eylem var: **1000Kitap: ekranı aç**, **1000Kitap: bekleyenleri gönder**, **1000Kitap: Okuyacaklarıma ekle**, **1000Kitap: ileti yaz**, **1000Kitap: ne okusam?** Kobo için üç eylem daha: **Kobo: şimdi senkronize et**, **Kobo senkron menüsü**, **Kobo'da notlu kitaplar**.
 
 ## Güncelleme
 
@@ -200,5 +215,6 @@ Güncellemede hesap bilgilerin, ayarların ve bekleyen gönderilerin korunur. Do
 
 - Hesap kodların yalnızca Kobo'ndaki `ayar.lua` dosyasında ve eklentinin ayarlarında durur, 1000Kitap dışında hiçbir yere gönderilmez. Bu kodlar hesabının anahtarıdır, kimseyle paylaşma.
 - Eklenti, güncelleme denetimi dışında yalnızca 1000Kitap'la konuşur. Güncelleme denetimi bu depodaki sürüm ve sürüm notu dosyalarını okur.
+- Kobo Senkron yalnızca Kobo'nun kendi veritabanını okur; ona hiçbir şey yazmaz ve bu bilgileri hiçbir yere göndermez.
 - Hata günlüğü yalnızca Kobo'nda durur; hiçbir yere gönderilmez ve hesap kodlarını içermez.
 - 1000Kitap'ta senin eklediğin hiçbir şeyi kendiliğinden silmez. Kitaplığından bir kitap ancak sen seçip onaylarsan çıkarılır; tek istisna, eşleşmeyi değiştirdiğinde eklentinin kendi eklediği eski baskıdır.

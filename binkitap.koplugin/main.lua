@@ -8,6 +8,7 @@ Keşif (ne okusam, koleksiyon, bilgi kartı, hedef, uyku ekranı): binkitap_kesi
 GitHub'dan güncelleme: binkitap_guncelle.lua
 İleti yazma: binkitap_ileti.lua
 Okuduklarını aktarma: binkitap_aktar.lua
+Kobo Senkron (Kobo notlarını KOReader'a aktarma): binkitap_kobo.lua, binkitap_kobo_*.lua
 ]]
 
 local ButtonDialog = require("ui/widget/buttondialog")
@@ -115,6 +116,15 @@ function BinKitap:init()
     -- SimpleUI kuruluysa eylemlerimizi onun Hızlı İşlemler listesine ekle. SimpleUI kendi
     -- ayarlarını yüklemeden önce olmalı: eklentiler alfabetik sırayla başlar (binkitap < simpleui).
     if self.simpleUIKaydet then pcall(self.simpleUIKaydet, self) end
+    -- Kobo Senkron bölümü: bir sorun çıkarsa 1000Kitap'ın geri kalanı etkilenmesin
+    if self.koboBaslat then
+        local ok, hata = pcall(self.koboBaslat, self)
+        if not ok then
+            logger.err("1000Kitap: Kobo Senkron başlatılamadı", hata)
+            BinKitap.hataKaydet("eklenti", "Kobo Senkron", tostring(hata))
+            self.kobo = nil
+        end
+    end
     -- KOReader yeniden açıldıysa yarım kalan kalabalık sırayı sürdür
     if not ORTAK.arka_plan and Api:kimlikVar() and #self:kuyruk() > TOPLU_ESIK and NetworkMgr:isOnline() then
         UIManager:scheduleIn(10, function() self:yavasGonder() end)
@@ -142,6 +152,7 @@ function BinKitap:onDispatcherRegisterActions()
         category = "none", event = "BinKitapEkran",
         title = _("1000Kitap: ekranı aç"), general = true,
     })
+    if self.koboEylemleriKaydet then self:koboEylemleriKaydet() end
 end
 
 ---------------------------------------------------------------------------
@@ -1025,7 +1036,8 @@ function BinKitap:renkTaramasi()
     local gonderilen = self.ui.doc_settings:readSetting("binkitap_gonderilen") or {}
     local eklenen = 0
     for _i, a in ipairs(liste) do
-        local eylem = a.drawer and a.color and eylemler[a.color]
+        -- Kobo'dan aktarılan vurgular kendiliğinden gönderilmez (Vurgular'dan seçilerek gönderilebilir)
+        local eylem = a.drawer and a.color and not a.kobo_id and eylemler[a.color]
         local esik = kitap.renk_baslangic
         if eylem and zamanlar[a.color] and zamanlar[a.color] > esik then esik = zamanlar[a.color] end
         if eylem and kirp(a.text) ~= "" and tostring(a.datetime or "") > esik then
@@ -1830,6 +1842,10 @@ end
 
 function BinKitap:onReaderReady()
     self:seansBaslat()
+    if self.koboKitapAcildi then
+        local ok, hata = pcall(self.koboKitapAcildi, self)
+        if not ok then logger.err("1000Kitap: Kobo notları", hata) end
+    end
     local kitap = self:kitapBilgisi()
     if kitap then
         if not kitap.renk_baslangic then
@@ -2329,6 +2345,13 @@ function BinKitap:menuOgeleri()
             help_text = _("Alıntı değil, kendi yazını 1000Kitap'ta ileti olarak paylaşır. Okuduğun kitabı etiketleyebilirsin."),
         }
     end
+    if self.koboMenusu and self:koboVarMi() then
+        ogeler[#ogeler + 1] = {
+            text = _("Kobo Senkron"),
+            help_text = _("Kobo'nun kendi okuyucusunda yaptığın vurguları, notları ve yer imlerini KOReader'a aktarır; okuma ilerlemesini eşleştirir, Kobo listelerini KOReader koleksiyonu yapar. Kobo'dan gelen vurgular 1000Kitap'a kendiliğinden gönderilmez."),
+            sub_item_table_func = function() return self:koboMenusu() end,
+        }
+    end
     ogeler[#ogeler + 1] = self:bekleyenlerMenuOgesi()
     ogeler[#ogeler + 1] = { text = _("Ayarlar"), sub_item_table_func = function() return self:ayarlarMenusu() end }
     return ogeler
@@ -2342,5 +2365,10 @@ yukle("binkitap_ileti")(BinKitap)
 yukle("binkitap_aktar")(BinKitap)
 yukle("binkitap_durum")(BinKitap)
 yukle("binkitap_ekran")(BinKitap)
+-- Kobo Senkron yüklenemezse (ör. eksik dosya) 1000Kitap onsuz çalışır
+do
+    local ok, hata = pcall(function() yukle("binkitap_kobo")(BinKitap) end)
+    if not ok then logger.err("1000Kitap: Kobo Senkron yüklenemedi", hata) end
+end
 
 return BinKitap

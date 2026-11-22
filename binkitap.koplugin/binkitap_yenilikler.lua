@@ -3,6 +3,14 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.0",
+        maddeler = {
+            "Kobo Senkron artık 1000Kitap'ın içinde: Kobo'nun kendi okuyucusunda yaptığın vurgular, notlar ve yer imleri KOReader'a gelir; okuma ilerlemesi eşleşir, Kobo listelerin KOReader koleksiyonu olur. Menüde 1000Kitap → Kobo Senkron; 1000Kitap ekranında Kobo'dan aktar ve Kobo notları.",
+            "Ayrı Kobo Senkron eklentisini kullanıyorduysan ayarların, aktarılmış notların, hareketlerin ve SimpleUI'deki Kobo düğmen aynen çalışır; notlar tekrar eklenmez. Eski eklenti açıksa 1000Kitap onu kapatmayı önerir.",
+            "Kobo'dan gelen vurgular renk kuralıyla 1000Kitap'a kendiliğinden gönderilmez. Göndermek istediklerini Vurgular'dan seçebilirsin.",
+        },
+    },
+    {
         surum = "1.2.3",
         maddeler = {
             "Güncelleme düzeltmesi: yeni bir sürüm yayınlandıktan hemen sonra güncellemeye basınca GitHub'ın önbelleği eski dosyaları verebiliyordu ve kurulum \"eksik indi\" diye yarıda kalıyordu. Artık dosyalar her zaman yayınlanan sürümün kendisinden indiriliyor.",

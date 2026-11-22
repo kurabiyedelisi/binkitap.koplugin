@@ -371,6 +371,8 @@ return function(BinKitap)
         { id = "binkitap_kitap_listeleri", ad = _("Kitap listeleri"), yap = function(p)
             p:menudenDiyalog(_("Kitap listeleri"), p:kesifListeleriMenusu())
         end },
+        -- Eski Kobo Senkron eklentisinin düğmesiyle aynı kimlik: SimpleUI'de kurulu düğme çalışmaya devam eder
+        { id = "kobosync", ad = _("Kobo"), simge = "kobo.svg", yap = function(p) p:koboHizliMenu() end },
     }
     BinKitap.SIMPLEUI_EYLEMLERI = SIMPLEUI_EYLEMLERI
 
@@ -381,12 +383,11 @@ return function(BinKitap)
             QA = ok and m or nil
         end
         if type(QA) ~= "table" or type(QA.register) ~= "function" then return false end
-        local simge = (BinKitap.DIZIN or "") .. "/1000kitap.svg"
         for _i, e in ipairs(SIMPLEUI_EYLEMLERI) do
             pcall(QA.register, {
                 id = e.id,
                 label = e.ad,
-                icon = simge,
+                icon = (BinKitap.DIZIN or "") .. "/" .. (e.simge or "1000kitap.svg"),
                 is_in_place = true,
                 is_async_in_place = true,
                 execute = function(ctx)
@@ -800,20 +801,28 @@ return function(BinKitap)
                 { text = _("Okuyacaklarıma ekle"), callback = function() self:okuyacaklaraEkle() end },
                 { text = _("Okuduklarımı aktar"), callback = kapat_ve(function() self:okuduklarimiAktar() end) },
             }
+            local satirlar = {
+                ilk_satir,
+                {
+                    { text = _("Durumları al"), callback = kapat_ve(function() self:durumlariAl() end) },
+                    { text = _("Kütüphaneyi eşleştir"), callback = kapat_ve(function() self:kutuphaneEslestir() end) },
+                },
+                {
+                    { text = _("Kitaplığım ›"), callback = function()
+                        self:menudenDiyalog(_("1000Kitap kitaplığım"), self:kitaplikMenusu())
+                    end },
+                    { text = _("İleti yaz"), callback = function() self:iletiYaz() end },
+                },
+            }
+            -- Kobo Senkron: Kobo okuyucusundaki notları getir / notlu kitaplara bak
+            if self.koboVarMi and self:koboVarMi() then
+                satirlar[#satirlar + 1] = {
+                    { text = _("Kobo'dan aktar"), callback = kapat_ve(function() self:koboSimdi() end) },
+                    { text = _("Kobo notları ›"), callback = function() self:koboRapor() end },
+                }
+            end
             bolumler[#bolumler + 1] = { ad = "kutuphane", kisa_sira = 1,
-                w = bolum(_("KÜTÜPHANE"), dugmeler({
-                    ilk_satir,
-                    {
-                        { text = _("Durumları al"), callback = kapat_ve(function() self:durumlariAl() end) },
-                        { text = _("Kütüphaneyi eşleştir"), callback = kapat_ve(function() self:kutuphaneEslestir() end) },
-                    },
-                    {
-                        { text = _("Kitaplığım ›"), callback = function()
-                            self:menudenDiyalog(_("1000Kitap kitaplığım"), self:kitaplikMenusu())
-                        end },
-                        { text = _("İleti yaz"), callback = function() self:iletiYaz() end },
-                    },
-                })),
+                w = bolum(_("KÜTÜPHANE"), dugmeler(satirlar)),
                 kisa = function() return bolum(_("KÜTÜPHANE"), dugmeler({ ilk_satir })) end,
             }
         end
