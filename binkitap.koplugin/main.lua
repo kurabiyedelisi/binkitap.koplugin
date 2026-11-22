@@ -684,9 +684,7 @@ function BinKitap:kitapSecildi(s, sonra)
     if not kitap.renk_baslangic then kitap.renk_baslangic = os.date("%Y-%m-%d %H:%M:%S") end
     self:kitapKaydetAyar(kitap)
     self:bildir(T(_("Eşleşti: %1"), kitap.adi), 2)
-    if self.settings:nilOrTrue("acilista_okuyorum") and not kitap.okuyorum_islendi then
-        self:okuyorumSirala(kitap)
-    end
+    self:acilistaOkuyorum(kitap)
     if sonra then UIManager:scheduleIn(0.5, sonra) end
 end
 
@@ -1099,6 +1097,62 @@ function BinKitap:okuyorumSirala(kitap)
     self:otomatikDurum(kitap, Api.DURUM.okuyorum)
 end
 
+--- Kitap 1000Kitap'ta ne zaman kendiliğinden "Okuyorum" olsun:
+-- "okuyunca" (varsayılan: %2 ya da 20 basılı sayfa okuyunca) | "acilis" (açılınca) | "hic"
+function BinKitap:okuyorumZamani()
+    local z = self.settings:readSetting("okuyorum_zamani")
+    if z == "okuyunca" or z == "acilis" or z == "hic" then return z end
+    if self.settings:readSetting("acilista_okuyorum") == false then return "hic" end -- eski ayar
+    return "okuyunca"
+end
+
+BinKitap.OKUYORUM_YUZDE, BinKitap.OKUYORUM_SAYFA = 0.02, 20
+
+--- Açılışta/eşleşince: "Açılınca" ayarındaysa hemen Okuyorum yapar.
+function BinKitap:acilistaOkuyorum(kitap)
+    if self:okuyorumZamani() == "acilis" and not kitap.okuyorum_islendi then
+        self:okuyorumSirala(kitap)
+    end
+end
+
+--- Okunan sayfaları sayar: yalnızca ileri, tek tek çevrilen sayfalar (içindekilerden
+-- atlamak sayılmaz). %2'ye ya da 20 basılı sayfaya ulaşınca kitabı Okuyorum yapar.
+function BinKitap:okumaSay(pageno)
+    if self._okuma_sayildi then return end
+    local doc = self.ui and self.ui.document
+    if not doc or not doc.getPageCount then return end
+    pageno = tonumber(pageno) or (self.ui.getCurrentPage and self.ui:getCurrentPage())
+    if not pageno then return end
+    local onceki = self._okuma_son_sayfa
+    self._okuma_son_sayfa = pageno
+    if not onceki or pageno <= onceki or pageno - onceki > 3 then return end
+    if self:okuyorumZamani() ~= "okuyunca" then return end
+    local kitap = self:kitapBilgisi()
+    if not kitap or kitap.otomatik then return end -- eşleşmemiş/doğrulanmamış: sayma
+    if kitap.okuyorum_islendi then self._okuma_sayildi = true; return end
+    self._okunan = (self._okunan or 0) + (pageno - onceki)
+    local toplam = doc:getPageCount()
+    if not toplam or toplam <= 0 then return end
+    local okunan = (tonumber(kitap.okunan_sayfa) or 0) + self._okunan
+    local oran = okunan / toplam
+    local basili = tonumber(kitap.basili_sayfa) and oran * tonumber(kitap.basili_sayfa)
+    if oran >= BinKitap.OKUYORUM_YUZDE or (basili and basili >= BinKitap.OKUYORUM_SAYFA) then
+        self._okuma_sayildi = true
+        kitap.okunan_sayfa, self._okunan = okunan, 0
+        self:okuyorumSirala(kitap)
+    end
+end
+
+--- Kapanışta/uykuda henüz eşiğe ulaşmamış okumayı kitaba yazar (sonraki açılışta sürer).
+function BinKitap:okumaSayisiniKaydet()
+    if not self._okunan or self._okunan <= 0 then return end
+    local kitap = self:kitapBilgisi()
+    if not kitap or kitap.okuyorum_islendi then return end
+    kitap.okunan_sayfa = (tonumber(kitap.okunan_sayfa) or 0) + self._okunan
+    self._okunan = 0
+    self:kitapKaydetAyar(kitap)
+end
+
 function BinKitap:durumIstegi(durum)
     local kitap = self:kitapBilgisi()
     if not kitap then
@@ -1280,6 +1334,7 @@ end
 
 --- Okumaya ara verirken (kapatma, uyku): seans/ilerleme kaydet, durum senkronu.
 function BinKitap:araVer()
+    self:okumaSayisiniKaydet()
     local kitap = self:kitapBilgisi()
     local seans_gitti = self:seansBitir()
     if kitap and not seans_gitti and self.settings:readSetting("ilerleme_modu") == "kapaninca" then
@@ -2086,6 +2141,7 @@ end
 
 function BinKitap:onReaderReady()
     self:seansBaslat()
+    self._okuma_son_sayfa = self.ui.getCurrentPage and self.ui:getCurrentPage() or nil
     if self.koboKitapAcildi then
         local ok, hata = pcall(self.koboKitapAcildi, self)
         if not ok then logger.err("1000Kitap: Kobo notları", hata) end
@@ -2114,9 +2170,7 @@ function BinKitap:onReaderReady()
                 UIManager:scheduleIn(3, function() if self.ui.document then self:ilerlemeSor() end end)
             end
             if self.acilistaBkDurumu then self:acilistaBkDurumu(k) end
-            if self.settings:nilOrTrue("acilista_okuyorum") and not k.okuyorum_islendi then
-                self:okuyorumSirala(k)
-            end
+            self:acilistaOkuyorum(k)
         end
         if kitap.otomatik then
             UIManager:scheduleIn(1, function()
@@ -2144,9 +2198,10 @@ function BinKitap:onReaderReady()
     end
 end
 
-function BinKitap:onPageUpdate()
+function BinKitap:onPageUpdate(pageno)
     ORTAK.son_etkilesim = os.time()
     self:seansIlerle()
+    self:okumaSay(pageno)
     if self.settings:readSetting("ilerleme_modu") ~= "yuzde10" then return end
     local kitap = self:kitapBilgisi()
     local yuzde = self:mevcutYuzde()
@@ -2302,6 +2357,28 @@ function BinKitap:renkMenusu()
     return ogeler
 end
 
+function BinKitap:okuyorumZamaniMenusu()
+    local function secenek(deger, metin)
+        return {
+            text = metin, radio = true,
+            checked_func = function() return self:okuyorumZamani() == deger end,
+            callback = function() self.settings:saveSetting("okuyorum_zamani", deger); self.settings:flush() end,
+        }
+    end
+    local adlar = { okuyunca = _("%2 ya da 20 sayfa okuyunca"), acilis = _("açılınca"), hic = _("hiçbir zaman") }
+    return {
+        text_func = function()
+            return T(_("\"Okuyorum\" yap: %1"), adlar[self:okuyorumZamani()])
+        end,
+        help_text = _("Kitap 1000Kitap'ta ne zaman kendiliğinden \"Okuyorum\" olsun? Varsayılan: kitabın %2'sini ya da 20 basılı sayfasını okuyunca (hangisi önce gelirse). Yalnızca ileri çevrilen sayfalar sayılır; içindekilerden atlamak ya da bir göz atmak sayılmaz. Okuma kapanışta kaydedilir, sonraki açılışta kaldığı yerden sayılır."),
+        sub_item_table = {
+            secenek("okuyunca", _("%2 ya da 20 sayfa okuyunca (önerilen)")),
+            secenek("acilis", _("Eşleşince / açılınca")),
+            secenek("hic", _("Hiçbir zaman")),
+        },
+    }
+end
+
 function BinKitap:yenidenOkumaMenusu()
     local function secenek(deger, metin)
         return {
@@ -2333,11 +2410,7 @@ function BinKitap:ayarlarMenusu()
             callback = function() NetworkMgr:runWhenOnline(function() self:baglantiTesti() end) end,
             separator = true,
         },
-        {
-            text = _("Eşleşince / açılınca \"Okuyorum\" yap"),
-            checked_func = function() return self.settings:nilOrTrue("acilista_okuyorum") end,
-            callback = function() self.settings:flipNilOrTrue("acilista_okuyorum"); self.settings:flush() end,
-        },
+        self:okuyorumZamaniMenusu(),
         self:yenidenOkumaMenusu(),
         {
             text = _("Kitap bitince bitiş ekranını göster"),

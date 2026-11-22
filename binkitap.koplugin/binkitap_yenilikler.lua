@@ -3,6 +3,14 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.9",
+        maddeler = {
+            "Kitap artık açılır açılmaz değil, %2'sini ya da 20 basılı sayfasını okuyunca (hangisi önce gelirse) 1000Kitap'ta \"Okuyorum\" oluyor. Yalnızca ileri çevrilen sayfalar sayılır; bir göz atmak, içindekilerden atlamak ya da geri gitmek sayılmaz. Okuduğun sayfalar kapanışta kaydedilir, sonraki açılışta sürer.",
+            "Okudum olan kitapta \"Yeniden mi okuyorsun?\" sorusu da artık okumaya başlayınca geliyor, kitabı açınca değil.",
+            "Ayarlar > \"Okuyorum\" yap: %2 ya da 20 sayfa okuyunca (önerilen), Eşleşince / açılınca (eski davranış) ya da Hiçbir zaman.",
+        },
+    },
+    {
         surum = "1.3.8",
         maddeler = {
             "3., 4. … okuma: her yeniden okuma 1000Kitap'ta bir okuma daha ekler; önceki okumaların durur. Her yeni okumanın sonunda bitiş ekranı yine çıkar.",

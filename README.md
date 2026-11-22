@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.3.8 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.3.9 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -14,7 +14,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 - **Renge göre kendiliğinden gönderir.** Örneğin sarı vurgular herkese açık alıntı, mavi vurgular gizli alıntı olarak gider.
 - **İleti yazdırır.** Alıntı olmayan kendi yazını 1000Kitap'ta ileti olarak paylaşabilirsin, okuduğun kitabı etiketleyerek.
 - **Geçmişini aktarır.** KOReader'da daha önce bitirdiğin kitapları okuma tarihleriyle 1000Kitap'ta "Okudum" yapar, istersen o kitaplardaki vurguları da gönderir.
-- **Okuma durumunu iki yönlü takip eder.** Kitabı açınca "Okuyorum" yapar. Kitap bitince tek ekranda "Okudum", puan ve kısa inceleme alır. 1000Kitap'ta değiştirdiğin durum da KOReader'a yansıyabilir.
+- **Okuma durumunu iki yönlü takip eder.** Kitabın %2'sini ya da 20 sayfasını okuyunca "Okuyorum" yapar. Kitap bitince tek ekranda "Okudum", puan ve kısa inceleme alır. 1000Kitap'ta değiştirdiğin durum da KOReader'a yansıyabilir.
 - **Bütün kütüphaneni eşleştirir.** Kobo'daki kitapları 1000Kitap'taki karşılıklarıyla eşleştirir, emin olamadıklarını sana sorar.
 - **1000Kitap kitaplığını yönetir.** Kobo'daki kitapları kitaplığına seçerek ekler, seçtiklerini çıkarır.
 - **Okuyacaklar listeni doldurur.** Kobo'daki kitaplarından seçerek ya da 1000Kitap'ta arayarak "Okuyacağım" listene ekler.
@@ -99,8 +99,8 @@ Ekran hafızadaki bilgilerle hemen açılır, kendi başına internete çıkmaz;
 - **Alıntı:** Metni seç → **1000Kitap'a gönder.** Metni, sayfayı ve notu düzeltebilir; konu ve yorum izni seçebilirsin.
 - **Gizli alıntı:** Alıntı penceresinde **Gizli yap**'a dokun. Gizli alıntıları 1000Kitap'ta yalnızca sen görürsün: kitabın sayfasında özel notların arasında durur, profilinde ve akışta görünmez. Hep gizli paylaşmak istersen **Ayarlar → Alıntıları varsayılan olarak gizli paylaş**'ı aç. Toplu gönderimde, vurgu aktarımında ve renk ayarlarında da gizli seçeneği var.
 - **Bu kitabın vurgularını gönder:** Hepsini ya da seçtiklerini, herkese açık ya da gizli gönderir. Daha önce gönderilen vurgu tekrar gitmez.
-- **Okuma durumu:** Kitabı açınca "Okuyorum" olur. KOReader'da kitabı Bitti, Beklemede ya da Okunuyor yaparsan 1000Kitap'a da yansır.
-- **Yeniden okuma:** 1000Kitap'ta **Okudum** olan bir kitabı yeniden okumaya başlayınca eski okuman bozulmaz; 1000Kitap'ta **yeni bir okuma** başlar; sitedeki **+ → 2. okumayı ekle → Okuyorum** ile aynı şey. Kitabı açınca ya da sayfan gönderilirken bir kez "Yeniden mi okuyorsun?" diye sorar; **Hayır, sadece bakıyorum** dersen o kitap için 30 gün sormaz. Menüden elle **Okuyorum** seçersen sormadan yeni okuma açılır. Her yeniden okuma bir okuma daha ekler (3., 4. … okuma); her birinin sonunda bitiş ekranı yine çıkar. Zaten Okudum olan kitabı yeniden okuyup bitirdiysen (bitiş ekranı ya da menüden Okudum), bu okumayı yeni okuma olarak eklemeyi sorar; toplu aktarımda sormaz. KOReader'da durum değişince (Beklemede, Okunacak) Okudum olan kitaba kendiliğinden dokunulmaz. Sormasın istersen: **Ayarlar → Okunmuş kitabı yeniden açınca** (Sor / Sormadan yeni okuma başlat / Dokunma).
+- **Okuma durumu:** Kitabın **%2'sini ya da 20 basılı sayfasını** (hangisi önce gelirse) okuyunca 1000Kitap'ta "Okuyorum" olur; yalnızca açıp bakmak, içindekilerden atlamak ya da geri gitmek sayılmaz. Okuduğun sayfalar kapanışta kaydedilir, sonraki açılışta kaldığı yerden sayılır. Değiştirmek için: **Ayarlar → "Okuyorum" yap** (%2 ya da 20 sayfa okuyunca / Eşleşince-açılınca / Hiçbir zaman). KOReader'da kitabı Bitti, Beklemede ya da Okunuyor yaparsan 1000Kitap'a da yansır.
+- **Yeniden okuma:** 1000Kitap'ta **Okudum** olan bir kitabı yeniden okumaya başlayınca eski okuman bozulmaz; 1000Kitap'ta **yeni bir okuma** başlar; sitedeki **+ → 2. okumayı ekle → Okuyorum** ile aynı şey. Okumaya başlayınca (%2 ya da 20 sayfa) ya da sayfan gönderilirken bir kez "Yeniden mi okuyorsun?" diye sorar; **Hayır, sadece bakıyorum** dersen o kitap için 30 gün sormaz. Menüden elle **Okuyorum** seçersen sormadan yeni okuma açılır. Her yeniden okuma bir okuma daha ekler (3., 4. … okuma); her birinin sonunda bitiş ekranı yine çıkar. Zaten Okudum olan kitabı yeniden okuyup bitirdiysen (bitiş ekranı ya da menüden Okudum), bu okumayı yeni okuma olarak eklemeyi sorar; toplu aktarımda sormaz. KOReader'da durum değişince (Beklemede, Okunacak) Okudum olan kitaba kendiliğinden dokunulmaz. Sormasın istersen: **Ayarlar → Okunmuş kitabı yeniden açınca** (Sor / Sormadan yeni okuma başlat / Dokunma).
 - **Ters yön:** Durumu 1000Kitap'ta (sitede ya da telefonda) değiştirdiysen, kitabı Kobo'da açınca KOReader'daki durumu da değiştirmeyi önerir: Okudum → Bitti, Yarım bıraktım → Beklemede, Okuyorum → Okunuyor. Kapatmak için: **Ayarlar → 1000Kitap'taki değişiklikleri KOReader'a yansıt.**
 - **Bitiş ekranı:** Kitap bitince "Okudum", 1–10 puan ve inceleme tek ekranda.
 - **Okuma ilerlemesi ve seanslar:** Kaçıncı sayfada olduğunu ve okuma süreni gönderir. Ayar hiç seçilmediyse ilk kitap açılışında bir kez sorulur: kitabı kapatınca / uykuya geçince, her %10'da bir ya da gönderme (sonradan: **Ayarlar → Okuma ilerlemesi**). Sayfa yalnızca 1000Kitap'ta **Okuyorum** olan kitaba yazılır; okuman başka bir baskıdaysa o okumaya yazılır. Gönderilmezse sebebi **Hata günlüğü**'nde görünür.
