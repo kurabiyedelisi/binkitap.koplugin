@@ -16,7 +16,8 @@ Okuma
   GET  v2/konular/konuArama?q=                            konu arama
   GET  analiz…/v2/kitaplar/tanidikOkurlar?id=             takip ettiklerinden okuyanlar
 Yazma
-  GET  v2/kitaplar/kitapOku?id=&durum=                    okuma durumu
+  GET  v2/kitaplar/kitapOku?id=&durum=&yeniOkuma=0&neOkusam=0   okuma durumu (mevcut okumayı değiştirir)
+  GET  v2/kitaplar/kitapOku?id=&durum=&yeniOkuma=1&neOkusam=0   yeni okuma ekle (sitede "+ → 2. okumayı ekle")
   GET  v2/kitaplar/kitapPuanVer?id=&puan=                 puan
   GET  v2/kitaplar/kitapOku?id=&durum=1&forceEkle=1&okuyorTarihsaat=&okuduTarihsaat=&isTopluIslem=1
                                                          tarihli okuma (sitedeki "Toplu okuma ekle")
@@ -677,14 +678,13 @@ function Api:durumAyarla(kitap_id, durum, tarih)
 end
 
 --- Okudum olan kitapta yeni bir okuma başlatır (yeniden okuma): eski "Okudum" kaydı durur,
--- bugünden başlayan yeni bir "Okuyorum" kaydı açılır (sitede 2. okuma). Sitenin okuma ekleme
--- isteğiyle aynı biçim; düz "durum=Okuyorum" isteği ise eski okumayı Okuyorum'a çevirir.
+-- 1000Kitap'ta "2. okuma" açılır. Sitedeki "+ → 2. okumayı ekle → Okuyorum" ile birebir aynı
+-- istek (Kasım 2026'da sitede izlendi): durum + yeniOkuma=1. Düz istek (yeniOkuma=0) ise
+-- mevcut okumanın durumunu değiştirir, eski Okudum'u Okuyorum'a çevirir.
 -- Gönderdikten sonra durumu yeniden okur: Okuyorum olmadıysa hata döner.
 function Api:yenidenOkumaBaslat(kitap_id)
     local r, err, tur = self:istek("GET", "kitaplar/kitapOku", {
-        { "id", kitap_id }, { "durum", Api.DURUM.okuyorum }, { "forceEkle", 1 },
-        { "okuyorTarihsaat", os.date("%d.%m.%Y %H:%M") },
-        { "isTopluIslem", 1 },
+        { "id", kitap_id }, { "durum", Api.DURUM.okuyorum }, { "yeniOkuma", 1 }, { "neOkusam", 0 },
     }, nil, true)
     if not r then return nil, err, tur end
     local m = self:okumaDurumu(kitap_id)
