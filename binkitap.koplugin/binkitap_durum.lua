@@ -128,7 +128,7 @@ return function(BinKitap)
     -------------------------------------------------------------------------
 
     function BinKitap:acilistaBkDurumu(kitap)
-        if not self.settings:nilOrTrue("durum_ters") then return end
+        if not self.settings:nilOrTrue("durum_ters") or self:hizModu() then return end
         if not kitap or kitap.otomatik or not Api:kimlikVar() or not NetworkMgr:isOnline() then return end
         local g = self:bkDurumGorulen(kitap.id)
         if g and os.time() - (g.z or 0) < ACILIS_ARALIK then return end

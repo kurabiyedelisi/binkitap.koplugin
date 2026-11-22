@@ -3,6 +3,14 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.10",
+        maddeler = {
+            "Hız modu (Ayarlar > Mod): okurken eklentinin kendiliğinden yaptığı işler durur, eşitlemeyi sen yaparsın. Arka planda ve uyurken gönderim, Wi-Fi açma, kitap açılınca Kobo notlarını alma ve Kobo taraması, açılışta 1000Kitap durumuna bakma, ISBN ile kendiliğinden eşleştirme, hedef/alıntı tazeleme ve güncelleme denetimi yapılmaz; sayfa her %10 yerine kapanışta sıraya alınır.",
+            "Hız modunda alıntılar, durumlar ve ilerleme sırada bekler: Bekleyen gönderiler'e dokununca (ya da \"1000Kitap: bekleyenleri gönder\" hareketiyle) gider. Kobo notları için Kobo Senkron > Şimdi tara.",
+            "Normal mod senin ayarlarınla çalışır; hız modu hiçbir ayarını değiştirmez. Hareketlere \"1000Kitap: hız modu aç/kapat\" de eklenebilir.",
+        },
+    },
+    {
         surum = "1.3.9",
         maddeler = {
             "Kitap artık açılır açılmaz değil, %2'sini ya da 20 basılı sayfasını okuyunca (hangisi önce gelirse) 1000Kitap'ta \"Okuyorum\" oluyor. Yalnızca ileri çevrilen sayfalar sayılır; bir göz atmak, içindekilerden atlamak ya da geri gitmek sayılmaz. Okuduğun sayfalar kapanışta kaydedilir, sonraki açılışta sürer.",

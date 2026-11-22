@@ -584,7 +584,7 @@ return function(BinKitap)
     --- "Okudum" gönderildikten sonra hedef ilerlemesini kısa bir bildirimle gösterir.
     -- Toplu gönderimde tek bildirim olsun diye gönderim bitene kadar bekler.
     function BinKitap:hedefBildirimiPlanla()
-        if not self.settings:nilOrTrue("hedef_bildirimi") then return end
+        if not self.settings:nilOrTrue("hedef_bildirimi") or self:hizModu() then return end
         if self._hedef_planli and UIManager.unschedule then UIManager:unschedule(self._hedef_planli) end
         local f
         f = function()
@@ -646,7 +646,8 @@ return function(BinKitap)
             if satir then parcalar[#parcalar + 1] = satir end
             local h = self.settings:readSetting("hedef_onbellek")
             local eski_hedef = type(h) ~= "table" or os.time() - (h.zaman or 0) > HEDEF_OMRU
-            if eski_hedef and Api:kimlikVar() and NetworkMgr:isOnline() and not self.hedef_yenileniyor then
+            if eski_hedef and Api:kimlikVar() and NetworkMgr:isOnline() and not self.hedef_yenileniyor
+                    and not self:hizModu() then
                 self.hedef_yenileniyor = true
                 UIManager:scheduleIn(12, function()
                     self:hedefTazele(function() self.hedef_yenileniyor = false end)
@@ -661,7 +662,8 @@ return function(BinKitap)
         if not alinti_acik then return end
         -- Günde bir kez, bağlıysa listeyi tazele
         local eski = type(onb) ~= "table" or os.time() - (onb.zaman or 0) > ALINTI_OMRU
-        if eski and self.kullanici_adi and NetworkMgr:isOnline() and not self.uyku_yenileniyor then
+        if eski and self.kullanici_adi and NetworkMgr:isOnline() and not self.uyku_yenileniyor
+                and not self:hizModu() then
             self.uyku_yenileniyor = true
             UIManager:scheduleIn(10, function()
                 local liste = self:alintilarimiGetir(self.kullanici_adi)

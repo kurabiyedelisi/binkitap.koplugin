@@ -137,6 +137,10 @@ function BinKitap:onDispatcherRegisterActions()
         category = "none", event = "BinKitapSimdiGonder",
         title = _("1000Kitap: bekleyenleri gönder"), general = true,
     })
+    Dispatcher:registerAction("binkitap_hiz_modu", {
+        category = "none", event = "BinKitapHizModu",
+        title = _("1000Kitap: hız modu aç/kapat"), general = true,
+    })
     Dispatcher:registerAction("binkitap_ileti_yaz", {
         category = "none", event = "BinKitapIletiYaz",
         title = _("1000Kitap: ileti yaz"), general = true,
@@ -1091,6 +1095,71 @@ function BinKitap:otomatikDurum(kitap, durum, secenekler)
     end
 end
 
+---------------------------------------------------------------------------
+-- Hız modu: kendiliğinden ağ işi ve ağır açılış işleri yapılmaz, gönderim elle.
+-- Kullanıcının ayarlarına dokunmaz; "Normal mod" seçilince her şey eskisi gibi.
+---------------------------------------------------------------------------
+
+function BinKitap:hizModu()
+    return self.settings:isTrue("hiz_modu")
+end
+
+--- Gerçekte uygulanan ilerleme modu: hız modunda "her %10" yerine "kapatınca".
+function BinKitap:ilerlemeModu()
+    local m = self.settings:readSetting("ilerleme_modu")
+    if m == "yuzde10" and self:hizModu() then return "kapaninca" end
+    return m
+end
+
+function BinKitap:hizModuAyarla(acik)
+    if acik == self:hizModu() then return end
+    if acik then
+        self.settings:makeTrue("hiz_modu")
+        ORTAK.arka_plan = nil -- süren arka plan gönderimi bir sonraki adımda durur
+    else
+        self.settings:delSetting("hiz_modu")
+    end
+    self.settings:flush()
+    if acik then
+        UIManager:show(InfoMessage:new{
+            text = _("Hız modu açık.\n\nOkurken hiçbir şey kendiliğinden gönderilmez ya da indirilmez: kitap açılışında Kobo notları ve 1000Kitap durumu bakılmaz, uyurken gönderim ve Wi-Fi açma yapılmaz, sayfa her %10'da değil kapanışta sıraya alınır.\n\nAlıntılar, durumlar ve ilerleme sırada bekler. Göndermek için: 1000Kitap → Bekleyen gönderiler (ya da \"1000Kitap: bekleyenleri gönder\" hareketi). Kobo notları için: Kobo Senkron → Şimdi tara.\n\nAyarların değişmedi; Normal moda dönünce hepsi eskisi gibi çalışır."),
+        })
+    else
+        local n = #self:kuyruk()
+        self:bildir(n > 0 and T(_("Normal mod: ayarların geçerli. %1 bekleyen iş gönderilecek."), n)
+            or _("Normal mod: ayarların geçerli."), 3)
+        self:bekleyenleriSurdur(2)
+    end
+end
+
+function BinKitap:modMenusu()
+    return {
+        text_func = function()
+            return self:hizModu() and _("Mod: Hız modu") or _("Mod: Normal (kendi ayarların)")
+        end,
+        help_text = _("Hız modu okurken eklentinin kendiliğinden yaptığı her işi durdurur; gönderimi sen yaparsın. Ayarlarına dokunmaz: Normal moda dönünce hepsi eskisi gibi."),
+        sub_item_table = {
+            {
+                text = _("Normal mod (kendi ayarların)"), radio = true,
+                checked_func = function() return not self:hizModu() end,
+                callback = function() self:hizModuAyarla(false) end,
+            },
+            {
+                text = _("Hız modu (otomatik işler kapalı, elle eşitle)"), radio = true,
+                checked_func = function() return self:hizModu() end,
+                callback = function() self:hizModuAyarla(true) end,
+                help_text = _("Kapalı olanlar: arka planda ve uyurken gönderim, Wi-Fi'yi açıp gönderme, kitap açılınca Kobo notlarını alma, dosya tarayıcısında Kobo taraması, açılışta 1000Kitap durumuna bakma, ISBN ile kendiliğinden eşleştirme, basılı sayfa sayısını indirme, hedef ve alıntı tazeleme, güncelleme denetimi, \"Okudum\"dan sonra hedef bildirimi. Sayfa ilerlemesi \"her %10\" yerine kapanışta sıraya alınır. Alıntılar, durumlar ve ilerleme sırada bekler; Bekleyen gönderiler'e dokununca gider."),
+            },
+        },
+        separator = true,
+    }
+end
+
+function BinKitap:onBinKitapHizModu()
+    self:hizModuAyarla(not self:hizModu())
+    return true
+end
+
 function BinKitap:okuyorumSirala(kitap)
     kitap.okuyorum_islendi = true
     self:kitapKaydetAyar(kitap)
@@ -1337,7 +1406,7 @@ function BinKitap:araVer()
     self:okumaSayisiniKaydet()
     local kitap = self:kitapBilgisi()
     local seans_gitti = self:seansBitir()
-    if kitap and not seans_gitti and self.settings:readSetting("ilerleme_modu") == "kapaninca" then
+    if kitap and not seans_gitti and self:ilerlemeModu() == "kapaninca" then
         self:ilerlemeSirala(kitap)
     end
     self:koDurumuKontrol()
@@ -1816,6 +1885,7 @@ function BinKitap:sinirMetni(k)
 end
 
 function BinKitap:yavasGonder()
+    if self:hizModu() then return end
     if ORTAK.arka_plan or #self:kuyruk() == 0 or not Api:kimlikVar() then return end
     if not self:siradakiYer(self:kuyruk()) then return end -- hepsi günlük sınırda
     ORTAK.arka_plan = { gonderilen = 0, hata = 0, hatalar = {} }
@@ -1906,7 +1976,7 @@ end
 -- Yalnızca başarılı olanlar sıradan çıkar; hata olursa durur, iş sırada kalır.
 local UYKU_EN_FAZLA, UYKU_SURESI = 5, 8
 function BinKitap:uykuOncesiGonder()
-    if not self.settings:nilOrTrue("uykuda_gonder") then return 0 end
+    if self:hizModu() or not self.settings:nilOrTrue("uykuda_gonder") then return 0 end
     if ORTAK.gonderiliyor or not Api:kimlikVar() or not NetworkMgr:isOnline() then return 0 end
     local k = self:kuyruk()
     if #k == 0 then return 0 end
@@ -1940,6 +2010,7 @@ end
 
 --- Bekleyen işleri uygun yoldan sürdürür (çoksa arka planda, azsa sessizce).
 function BinKitap:bekleyenleriSurdur(gecikme)
+    if self:hizModu() then return end
     local n = #self:kuyruk()
     if n == 0 or not Api:kimlikVar() or not NetworkMgr:isOnline() then return end
     if not self:siradakiYer(self:kuyruk()) then return end -- hepsi günlük sınırda, yarın
@@ -1965,6 +2036,9 @@ end
 function BinKitap:sirayiGonder(yeni_is_sayisi)
     if not Api:kimlikVar() then return self:kimlikUyarisi() end
     if (yeni_is_sayisi or 0) > TOPLU_ESIK then
+        if self:hizModu() then
+            return self:bildir(T(_("%1 iş sıraya alındı. Hız modu açık: \"Bekleyen gönderiler\"e dokununca gönderilir."), yeni_is_sayisi), 5)
+        end
         self:bildir(T(_("%1 iş sıraya alındı. Arka planda, okumanı bölmeden yavaş yavaş gönderilecek; \"Bekleyen gönderiler\"den izleyebilirsin."), yeni_is_sayisi), 5)
         if NetworkMgr:isOnline() then self:yavasGonder() end
         return
@@ -2115,6 +2189,7 @@ end
 --- Arka planda gönderim: bağlıysa hemen; değilse ve izin varsa Wi-Fi'yi açıp
 -- gönderdikten sonra kapatır.
 function BinKitap:arkaPlanGonder(wifi_acabilir)
+    if self:hizModu() then return end -- hız modu: elle gönderilir
     if #self:kuyruk() == 0 or not Api:kimlikVar() then return end
     if NetworkMgr:isOnline() then
         return self:kuyruguGonder(true)
@@ -2152,7 +2227,7 @@ function BinKitap:onReaderReady()
             kitap.renk_baslangic = os.date("%Y-%m-%d %H:%M:%S")
             self:kitapKaydetAyar(kitap)
         end
-        if not kitap.basili_sayfa and NetworkMgr:isOnline() then
+        if not kitap.basili_sayfa and NetworkMgr:isOnline() and not self:hizModu() then
             -- Kütüphane eşleştirmesinde atlanan basılı sayfa sayısını şimdi al
             UIManager:scheduleIn(5, function()
                 local b = Api:kitapBilgisi(kitap.id)
@@ -2179,7 +2254,7 @@ function BinKitap:onReaderReady()
         else
             acilisIsleri(kitap)
         end
-    elseif Api:kimlikVar() and NetworkMgr:isOnline() then
+    elseif Api:kimlikVar() and NetworkMgr:isOnline() and not self:hizModu() then
         -- ISBN ya da Calibre kimliği varsa sormadan eşleştir
         local bilgi = self:belgeBilgisi()
         if bilgi.isbn or bilgi.kitap_id then
@@ -2191,6 +2266,7 @@ function BinKitap:onReaderReady()
         end
     end
     if self.uykuMesajiGuncelle then self:uykuMesajiGuncelle() end
+    if self:hizModu() then return end
     if #self:kuyruk() > TOPLU_ESIK and Api:kimlikVar() and NetworkMgr:isOnline() then
         self:yavasGonder()
     elseif #self:kuyruk() > 0 and Api:kimlikVar() and NetworkMgr:isOnline() then
@@ -2202,7 +2278,7 @@ function BinKitap:onPageUpdate(pageno)
     ORTAK.son_etkilesim = os.time()
     self:seansIlerle()
     self:okumaSay(pageno)
-    if self.settings:readSetting("ilerleme_modu") ~= "yuzde10" then return end
+    if self:ilerlemeModu() ~= "yuzde10" then return end
     local kitap = self:kitapBilgisi()
     local yuzde = self:mevcutYuzde()
     if not kitap or not yuzde then return end
@@ -2255,7 +2331,7 @@ end
 
 function BinKitap:onNetworkConnected()
     self:bekleyenleriSurdur(3)
-    if self.guncellemeKendiliginden then self:guncellemeKendiliginden() end
+    if self.guncellemeKendiliginden and not self:hizModu() then self:guncellemeKendiliginden() end
 end
 
 function BinKitap:onBinKitapSimdiGonder()
@@ -2403,6 +2479,7 @@ end
 
 function BinKitap:ayarlarMenusu()
     local ogeler = {
+        self:modMenusu(),
         self:hataGunluguMenusu(),
         { text = _("Hesap bilgileri"), keep_menu_open = true, callback = function() self:kimlikPenceresi() end },
         {
@@ -2532,6 +2609,7 @@ function BinKitap:bekleyenlerMenuOgesi()
             if #k > 0 and not self:siradakiYer(k) then
                 return T(_("Bekleyen gönderiler: %1 (günlük sınır, yarın)"), #k)
             end
+            if self:hizModu() then return T(_("Bekleyen gönderiler: %1 (hız modu: dokun, gönder)"), #k) end
             return T(_("Bekleyen gönderiler: %1"), #k)
         end,
         keep_menu_open = true,

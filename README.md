@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.3.9 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.3.10 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -192,6 +192,18 @@ Kobo'nun kendi okuyucusunda (Nickel) yaptıklarını KOReader'a aktarır. Önced
 - Yavaş çalışır (sayfalar arası 1,5 sn, silmeler arası 4 sn). Okuma yarıda kalırsa ya da 1000Kitap "çok fazla istek" derse hiçbir şey silmez; silerken bir hata olursa durur.
 - İlk silmeden sonra listeyi yeniden okuyup silinenin gittiğini, kalanın durduğunu doğrular; tutmazsa başka hiçbir şeyi silmez.
 - Ayarlar'da 1000Kitap kullanıcı adının girili olması gerekir.
+
+### Hız modu
+
+Eklenti açıkken KOReader yavaşlıyorsa: **Araçlar → 1000Kitap → Ayarlar → Mod → Hız modu.** Okurken eklentinin kendiliğinden yaptığı işler durur, eşitlemeyi sen yaparsın:
+
+- Arka planda, Wi-Fi gelince ve uyurken gönderim yok; Wi-Fi kendiliğinden açılmaz.
+- Kitap açılınca Kobo notları alınmaz, dosya tarayıcısında Kobo taraması yapılmaz (elle: **Kobo Senkron → Şimdi tara**).
+- Açılışta 1000Kitap durumuna bakılmaz, ISBN ile kendiliğinden eşleştirilmez, basılı sayfa sayısı indirilmez.
+- Hedef ve alıntı tazeleme, güncelleme denetimi ve "Okudum"dan sonraki hedef bildirimi yapılmaz.
+- Sayfa ilerlemesi "her %10" yerine kapanışta sıraya alınır.
+
+Alıntılar, durumlar ve ilerleme sırada bekler; **Bekleyen gönderiler**'e dokununca (ya da **1000Kitap: bekleyenleri gönder** hareketiyle) gider. Hız modu hiçbir ayarını değiştirmez: **Normal mod**'a dönünce her şey senin ayarlarınla eskisi gibi çalışır ve bekleyenler gönderilir. Hareketlere **1000Kitap: hız modu aç/kapat** de eklenebilir.
 
 ### Kısayollar ve çevrimdışı kullanım
 

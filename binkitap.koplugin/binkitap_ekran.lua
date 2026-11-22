@@ -341,7 +341,7 @@ return function(BinKitap)
         end
         -- Hedef eskiyse arkadan tazele ve ekranı yenile
         local v = self._ekran and self._ekran.veri
-        if v and v.hedef_eski and NetworkMgr:isOnline() and self.hedefTazele then
+        if v and v.hedef_eski and NetworkMgr:isOnline() and self.hedefTazele and not self:hizModu() then
             UIManager:scheduleIn(1, function()
                 if not self._ekran then return end
                 self:hedefTazele(function() if self._ekran then self._ekran:yenile() end end)

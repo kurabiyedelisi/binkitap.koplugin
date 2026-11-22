@@ -135,9 +135,14 @@ end
 function Kobo:init()
     self.settings = LuaSettings:open(SETTINGS_FILE)
     self.is_reader = self.ui.document ~= nil
-    if not self.is_reader and self:getSetting("auto_scan") then
+    if not self.is_reader and self:getSetting("auto_scan") and not self:hizModu() then
         UIManager:scheduleIn(1.5, function() self:autoScan() end)
     end
+end
+
+--- 1000Kitap'ın hız modu açıksa kendiliğinden tarama ve açılışta aktarma yapılmaz (elle: Şimdi tara).
+function Kobo:hizModu()
+    return self.sahip ~= nil and self.sahip.hizModu ~= nil and self.sahip:hizModu()
 end
 
 --- Eski, ayrı Kobo Senkron eklentisi hâlâ açıksa iş onundur: ikisi aynı anda aktarmasın.
@@ -1125,7 +1130,7 @@ end
 -- the book open in the reader
 
 function Kobo:onReaderReady()
-    if not self.is_reader or not self.ui.rolling or self:eskiAcik() then return end
+    if not self.is_reader or not self.ui.rolling or self:eskiAcik() or self:hizModu() then return end
     local file = self.ui.document and self.ui.document.file
     if not file then return end
     UIManager:scheduleIn(1, function()
