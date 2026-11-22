@@ -3,6 +3,14 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.1",
+        maddeler = {
+            "Kobo vurgularını tek tuşla 1000Kitap'a gönder: 1000Kitap ekranında, Kobo Senkron menüsünde ve Kobo hızlı menüsünde. Okurken o kitabınkileri, dosya tarayıcısında bütün kitaplarınkileri gönderir; herkese açık mı gizli mi diye bir kez sorar. Daha önce aktarılmış Kobo vurguları da tanınır.",
+            "Dosya tarayıcısından gönderilen Kobo vurgularına sayfa numarası yazılır (yeni aktarılanlarda).",
+            "Aktarırken yüzde görünüyor: Kobo notları aktarılırken hangi kitapta olduğun, kaç not arandığı ve yüzde; büyük kitaplar açılırken beklemenin normal olduğu yazıyor. Okuduklarını aktar, durumları al, eşleştirme ve gönderimde de yüzde var.",
+        },
+    },
+    {
         surum = "1.3.0",
         maddeler = {
             "Kobo Senkron artık 1000Kitap'ın içinde: Kobo'nun kendi okuyucusunda yaptığın vurgular, notlar ve yer imleri KOReader'a gelir; okuma ilerlemesi eşleşir, Kobo listelerin KOReader koleksiyonu olur. Menüde 1000Kitap → Kobo Senkron; 1000Kitap ekranında Kobo'dan aktar ve Kobo notları.",

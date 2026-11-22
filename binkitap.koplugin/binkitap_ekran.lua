@@ -820,6 +820,9 @@ return function(BinKitap)
                     { text = _("Kobo'dan aktar"), callback = kapat_ve(function() self:koboSimdi() end) },
                     { text = _("Kobo notları ›"), callback = function() self:koboRapor() end },
                 }
+                satirlar[#satirlar + 1] = {
+                    { text = _("Kobo vurgularını 1000Kitap'a gönder"), callback = function() self:koboVurgulariniGonder() end },
+                }
             end
             bolumler[#bolumler + 1] = { ad = "kutuphane", kisa_sira = 1,
                 w = bolum(_("KÜTÜPHANE"), dugmeler(satirlar)),

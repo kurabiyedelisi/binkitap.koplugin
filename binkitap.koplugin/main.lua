@@ -532,6 +532,13 @@ end
 
 --- Listelerde satırın sağındaki yazı. KOReader bu yazı satırdan genişse çöktüğü için
 -- (MenuItem'da eksi genişlik) her zaman kısa tutulur: en fazla 32 harf.
+--- İlerleme yüzdesi: "%42" (Türkçede işaret önde). T() şablonuna değer olarak verilir.
+function BinKitap.yuzde(i, n)
+    i, n = tonumber(i) or 0, tonumber(n) or 0
+    if n <= 0 then return "%0" end
+    return "%" .. math.max(0, math.min(100, math.floor(i / n * 100)))
+end
+
 function BinKitap.sagYazi(s)
     if s == nil then return nil end
     s = tostring(s):gsub("%s+", " ")
@@ -1705,7 +1712,7 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
         if kutu then kapatiyorum = true; UIManager:close(kutu); kapatiyorum = false end
         local k
         k = InfoMessage:new{
-            text = T(_("1000Kitap'a gönderiliyor…\n\n%1 / %2\n\nDurdurmak için dokun; kalanlar sırada bekler."), yapilan, toplam),
+            text = T(_("1000Kitap'a gönderiliyor… %1\n\n%2 / %3\n\nDurdurmak için dokun; kalanlar sırada bekler."), BinKitap.yuzde(yapilan, toplam), yapilan, toplam),
             dismiss_callback = function()
                 if kapatiyorum then return end
                 if kutu == k then kutu = nil end

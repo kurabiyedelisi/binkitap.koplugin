@@ -180,6 +180,12 @@ function Kobo:showQuickDialog()
         {{ text = "Kobo'da notlu kitaplar", callback = function() close(); self:showReport() end }},
         {{ text = "Koleksiyonlar", callback = function() close(); self:showCollections() end }},
     }
+    if self.sahip and self.sahip.koboVurgulariniGonder then
+        table.insert(buttons, 2, {{
+            text = (self.is_reader and "Bu kitabın Kobo vurgularını 1000Kitap'a gönder" or "Kobo vurgularını 1000Kitap'a gönder"),
+            callback = function() close(); self.sahip:koboVurgulariniGonder() end,
+        }})
+    end
     if self.is_reader and self.ui.rolling then
         table.insert(buttons, 2, {{
             text = "Bu kitabın Kobo notlarını aktar",
@@ -326,7 +332,7 @@ end
 
 function Kobo:doScan(interactive)
     local path = self:dbPath()
-    Trapper:info("Kobo ile eşleştiriliyor…")
+    Trapper:info("Kobo ile eşleştiriliyor…\n\nKobo veritabanı okunuyor.")
     local db, err = KoboDB.read(path)
     if not db then
         Trapper:clear()
@@ -595,6 +601,38 @@ local function kreaderDate(rec)
     return KUtil.toKoreaderDateTime(rec.created) or os.date("%Y-%m-%d %H:%M:%S")
 end
 
+local function benzerMetin(a, b)
+    a, b = KUtil.normalize(a), KUtil.normalize(b)
+    if a == "" or b == "" then return true end
+    local n = math.min(15, #a, #b)
+    return a:find(b:sub(1, n), 1, true) ~= nil or b:find(a:sub(1, n), 1, true) ~= nil
+end
+
+--- Kobo'dan gelmiş ama işaretsiz vurguları (eski Kobo Senkron eklentisinin ya da
+--- 1.3.0'dan önce aktarılanlar) Kobo kaydının tarihinden tanıyıp kobo_id ekler.
+--- Aktarılırken vurgunun tarihi Kobo'daki oluşturma anı yapılır; saniyesine kadar
+--- aynı tarihli başka vurgu pek olmaz, yine de metin de karşılaştırılır.
+--- Yeni işaretlenen sayısını döner.
+function Kobo.kimlikleriTamamla(annotations, recs)
+    if type(annotations) ~= "table" or type(recs) ~= "table" then return 0 end
+    local tarihli = {}
+    for _i, rec in ipairs(recs) do
+        if rec.kind == "highlight" and rec.created then
+            local d = KUtil.toKoreaderDateTime(rec.created)
+            if d then tarihli[d] = rec end
+        end
+    end
+    local n = 0
+    for _i, a in ipairs(annotations) do
+        local rec = a.drawer and not a.kobo_id and a.datetime and tarihli[a.datetime]
+        if rec and benzerMetin(a.text, rec.text) then
+            a.kobo_id = rec.id
+            n = n + 1
+        end
+    end
+    return n
+end
+
 function Kobo:makeHighlightItem(rec, r, drawer, color, chapter)
     return {
         datetime = kreaderDate(rec),
@@ -608,6 +646,7 @@ function Kobo:makeHighlightItem(rec, r, drawer, color, chapter)
         pos1 = r.pos1,
         epubcfi = r.epubcfi,
         kobo_id = rec.id, -- 1000Kitap renk kuralıyla kendiliğinden göndermesin
+        kobo_oran = r.oran, -- kitabın neresinde (0..1): kitap açılmadan sayfa tahmini
     }
 end
 
@@ -682,7 +721,9 @@ function Kobo:batchImport(db)
     table.sort(todo, function(a, b) return a.title < b.title end)
 
     for i, job in ipairs(todo) do
-        local label = T("Kobo notları aktarılıyor (%1/%2)\n%3\n\nDurdurmak için dokun.", i, #todo, job.title)
+        -- yüzde: bitmiş kitaplar; her kitap açılıp taranırken ekran değişmez, donmadığını söyle
+        local label = T("Kobo notları aktarılıyor · %1\n\n%2 / %3 kitap: %4\n%5 vurgu/not aranıyor\n\nKitap açılıp taranıyor; büyük kitaplarda bir dakikayı bulabilir.\nDurdurmak için dokun.",
+            "%" .. math.floor((i - 1) / #todo * 100), i, #todo, job.title, #job.pending)
         local completed, out = Trapper:dismissableRunInSubprocess(function()
             return Locate.openAndLocate(job.file, job.dom, job.pending, { chapters = true, cfi = true })
         end, label)
@@ -825,6 +866,8 @@ function Kobo:liveImport(file, recs, interactive)
         return interactive and "Vurgu aktarımı için KOReader'ın 2024.04 veya daha yeni bir sürümü gerekiyor." or nil
     end
     local ds = self.ui.doc_settings
+    -- önceden aktarılmış ama işaretsiz Kobo vurguları: 1000Kitap renk kuralıyla göndermesin
+    pcall(Kobo.kimlikleriTamamla, self.ui.annotation.annotations, recs)
     local imported = ds:readSetting("kobosync_imported") or {}
     local failed = ds:readSetting("kobosync_failed") or {}
     if interactive then
@@ -836,7 +879,7 @@ function Kobo:liveImport(file, recs, interactive)
     local doc = self.ui.document
     local completed, results = Trapper:dismissableRunInSubprocess(function()
         return Locate.locateAll(doc, pending, { cfi = true })
-    end, T("Kobo'dan %1 vurgu/not ekleniyor…\n\nDurdurmak için dokun.", #pending))
+    end, T("Kobo'dan %1 vurgu/not ekleniyor…\n\nKitapta aranıyor; uzun kitaplarda biraz sürebilir.\nDurdurmak için dokun.", #pending))
     if not completed or type(results) ~= "table" then
         return "Aktarımı durdurdun; kalanlar kitabı bir sonraki açışında eklenecek."
     end

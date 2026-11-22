@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.3.0 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.3.1 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -176,7 +176,9 @@ Kobo'nun kendi okuyucusunda (Nickel) yaptıklarını KOReader'a aktarır. Önced
 - **Kendiliğinden çalışır:** Dosya tarayıcısı açılınca Kobo'da bir şey değiştiyse tarar; kitap açılınca o kitabın yeni notlarını ekler. Ekrana dokunursan durur, kalanlar kitabı açınca eklenir.
 - **Nereden:** **1000Kitap → Kobo Senkron** (Şimdi senkronize et, Kobo'da notlu kitaplar, Koleksiyonlar, Ayarlar). 1000Kitap ekranının Kütüphane bölümünde **Kobo'dan aktar** ve **Kobo notları**. SimpleUI'de **Kobo** düğmesi.
 - Aktarım tek yönlüdür (Kobo → KOReader); Kobo'nun veritabanına hiçbir şey yazılmaz. Bir kez aktarılan not, KOReader'da silsen de tekrar eklenmez. Kobo'da ve KOReader'da aynı dosya okunmalıdır; Kobo mağazasından alınmış şifreli kitaplar ve kalemle yapılan çizimler aktarılamaz.
-- **Kobo'dan gelen vurgular 1000Kitap'a kendiliğinden gönderilmez,** renk kuralına uysalar bile. Göndermek istediklerini okurken **Bu kitabın vurgularını gönder** ile seçebilirsin.
+- **Kobo vurgularını tek tuşla 1000Kitap'a gönder.** 1000Kitap ekranında **Kobo vurgularını 1000Kitap'a gönder**, ayrıca Kobo Senkron menüsünde ve Kobo hızlı menüsünde. Okurken o kitabın, dosya tarayıcısında bütün kitapların Kobo'dan gelen ve henüz gönderilmemiş vurgularını gönderir; herkese açık mı gizli mi diye bir kez sorar. Eşleşmesi doğrulanmamış kitaplar yanlış kitaba gitmesin diye dahil edilmez, **Kitap kitap seç**'ten eklenebilir. Bir kez gönderilen vurgu tekrar gönderilmez.
+- Kobo'dan gelen vurgular renk kuralıyla **kendiliğinden** gönderilmez, renk kuralına uysalar bile; yukarıdaki düğmeyle ya da okurken **Bu kitabın vurgularını gönder → Yalnızca Kobo'dan gelenler** ile gönderilir.
+- **Aktarırken** hangi kitapta olduğu, kaç not arandığı ve yüzde görünür. Her kitap açılıp taranırken ekran bir süre değişmeyebilir; büyük kitaplarda bir dakikayı bulabilir, donmuş değildir.
 - **Eski Kobo Senkron eklentisini kullanıyorduysan:** ayarların, aktarılmış notların, hareketlerin ve SimpleUI'deki Kobo düğmen aynen çalışır. Eski eklenti hâlâ açıksa, ikisi aynı işi yapmasın diye Kobo işlerini o yapar ve 1000Kitap onu kapatmayı önerir. Kapatınca `koreader/plugins/kobosync.koplugin` klasörünü silebilirsin.
 
 ### Kısayollar ve çevrimdışı kullanım

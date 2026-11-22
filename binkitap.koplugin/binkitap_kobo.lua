@@ -22,6 +22,12 @@ local Dispatcher = require("dispatcher")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
 local _ = require("gettext")
+local T = require("ffi/util").template
+
+local function kirp(s)
+    if type(s) ~= "string" then return "" end
+    return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
 
 local eklenti_dizini = (debug.getinfo(1, "S").source or ""):match("^@(.+)/[^/]+$") or "."
 local function yukle(ad)
@@ -163,6 +169,147 @@ return function(BinKitap)
         UIManager:show(dialog)
     end
 
+    ---------------------------------------------------------------------------
+    -- Kobo'dan gelen vurguları 1000Kitap'a tek tuşla gönderme
+    ---------------------------------------------------------------------------
+
+    --- Kobo'dan gelmiş ve henüz gönderilmemiş vurgular. recs verilirse işaretsiz
+    --- eski aktarımlar da tarihlerinden tanınır (işaret eklenir).
+    function BinKitap:koboGonderilmemis(annotations, gonderilen, recs)
+        if recs then pcall(Kobo.kimlikleriTamamla, annotations, recs) end
+        local t = {}
+        for _i, a in ipairs(type(annotations) == "table" and annotations or {}) do
+            if a.kobo_id and a.drawer and kirp(a.text) ~= "" and not gonderilen[self:vurguAnahtari(a)] then
+                t[#t + 1] = a
+            end
+        end
+        return t
+    end
+
+    --- Herkese açık mı gizli mi: tek soru, varsayılan "alıntılar gizli" ayarına göre önde.
+    function BinKitap:koboGonderSor(baslik, gonder, ek_dugmeler)
+        local dialog
+        local acik = { text = _("Herkese açık gönder"), callback = function() UIManager:close(dialog); gonder(false) end }
+        local gizli = { text = _("Gizli gönder"), callback = function() UIManager:close(dialog); gonder(true) end }
+        local dugmeler = { self.settings:isTrue("alinti_gizli") and { gizli, acik } or { acik, gizli } }
+        for _i, d in ipairs(ek_dugmeler or {}) do
+            local cb = d.callback
+            dugmeler[#dugmeler + 1] = {{ text = d.text, callback = function() UIManager:close(dialog); cb() end }}
+        end
+        dugmeler[#dugmeler + 1] = {{ text = _("Vazgeç"), callback = function() UIManager:close(dialog) end }}
+        dialog = ButtonDialog:new{
+            title = baslik .. "\n\n" .. _("Herkese açık alıntılar profilinde ve akışta görünür; gizlileri yalnızca sen görürsün."),
+            title_align = "left",
+            buttons = dugmeler,
+        }
+        UIManager:show(dialog)
+    end
+
+    --- Okurken: bu kitabın Kobo vurguları. Dosya tarayıcısında: bütün kitaplarınki.
+    function BinKitap:koboVurgulariniGonder()
+        if not (self.ui.document and self.ui.doc_settings) then return self:koboTumunuGonder() end
+        local kitap = self:kitapBilgisi()
+        if not kitap then
+            return self:kitapEslestir(function() self:koboVurgulariniGonder() end)
+        end
+        local liste = self.ui.annotation and self.ui.annotation.annotations
+        if type(liste) ~= "table" then
+            return self:hataGoster(_("Bu özellik KOReader 2024.07 veya daha yeni bir sürüm gerektirir."))
+        end
+        local recs
+        if self.kobo and KoboDB.exists(self.kobo:dbPath()) then
+            local db = KoboDB.read(self.kobo:dbPath(), { file = self:acikDosya(), bookmarks = true })
+            recs = db and db.annotations[self:acikDosya()]
+        end
+        local gonderilen = self.ui.doc_settings:readSetting("binkitap_gonderilen") or {}
+        local bekleyen = self:koboGonderilmemis(liste, gonderilen, recs)
+        if #bekleyen == 0 then
+            return self:bildir(_("Bu kitapta 1000Kitap'a gönderilmemiş Kobo vurgusu yok."), 3)
+        end
+        self:koboGonderSor(T(_("“%1” kitabında Kobo'dan gelen %2 vurgu 1000Kitap'a gönderilsin mi?"), kitap.adi, #bekleyen),
+            function(ozel)
+                local n = self:vurgulariSirala(kitap, bekleyen, ozel)
+                if n <= BinKitap.TOPLU_ESIK then self:bildir(T(_("%1 vurgu sıraya alındı."), n), 2) end
+            end)
+    end
+
+    --- Dosya tarayıcısından: Kobo'dan vurgu gelen bütün kitaplar.
+    function BinKitap:koboTumunuGonder()
+        if not self.kobo or not KoboDB.exists(self.kobo:dbPath()) then
+            return self:bildir(_("Kobo veritabanı bulunamadı."), 3)
+        end
+        local db = KoboDB.read(self.kobo:dbPath(), { bookmarks = true })
+        if not db then return self:bildir(_("Kobo veritabanı okunamadı."), 3) end
+        local DocSettings = require("docsettings")
+        local hazir, dogrulanmamis, eslesmemis, toplam = {}, {}, 0, 0
+        for dosya, recs in pairs(db.annotations) do
+            local ok_ds, ds = pcall(function()
+                return DocSettings:hasSidecarFile(dosya) and DocSettings:open(dosya) or nil
+            end)
+            if ok_ds and ds then
+                local ann = ds:readSetting("annotations")
+                local gonderilen = ds:readSetting("binkitap_gonderilen") or {}
+                local yeni = self:koboGonderilmemis(ann, gonderilen, recs)
+                if #yeni > 0 then
+                    local k = ds:readSetting("binkitap")
+                    if type(k) ~= "table" or not k.id then k = self:dosyaEslesmesi(dosya) end
+                    if type(k) ~= "table" or not k.id then
+                        eslesmemis = eslesmemis + 1
+                    else
+                        table.sort(yeni, function(x, y) return tostring(x.datetime or "") < tostring(y.datetime or "") end)
+                        local e = { yol = dosya, kitap = k, vurgular = yeni, sayfa_sayisi = tonumber(ds:readSetting("doc_pages")) }
+                        if k.otomatik then
+                            dogrulanmamis[#dogrulanmamis + 1] = e
+                        else
+                            hazir[#hazir + 1] = e
+                            toplam = toplam + #yeni
+                        end
+                    end
+                end
+            end
+        end
+        table.sort(hazir, function(x, y) return tostring(x.kitap.adi) < tostring(y.kitap.adi) end)
+        if #hazir == 0 and #dogrulanmamis == 0 then
+            if eslesmemis > 0 then
+                return self:bildir(T(_("Kobo'dan gelen gönderilmemiş vurgular %1 kitapta, ama bu kitaplar 1000Kitap'ta eşleşmemiş. Önce Kütüphaneyi eşleştir'i çalıştır."), eslesmemis), 6)
+            end
+            return self:bildir(_("1000Kitap'a gönderilmemiş Kobo vurgusu yok."), 3)
+        end
+
+        local function kitapKitapSec()
+            local ogeler = {}
+            for _i, e in ipairs(hazir) do
+                ogeler[#ogeler + 1] = { metin = e.kitap.adi, ek = T(_("%1 vurgu"), #e.vurgular), secili = true, veri = e }
+            end
+            for _i, e in ipairs(dogrulanmamis) do
+                ogeler[#ogeler + 1] = { metin = e.kitap.adi, ek = T(_("%1 vurgu · eşleşme doğrulanmadı"), #e.vurgular), secili = false, veri = e }
+            end
+            self:secimListesi{
+                baslik = _("Kobo vurguları — kitaplar"),
+                bilgi = _("Seçtiğin kitapların Kobo'dan gelen vurguları 1000Kitap'a gönderilir. Eşleşmesi doğrulanmamış kitaplar seçili gelmez: yanlış kitaba gitmesin."),
+                ogeler = ogeler,
+                onay_metni = _("Seçilenlerin vurgularını gönder (%1)"),
+                onay = function(secilen)
+                    local n = 0
+                    for _i, e in ipairs(secilen) do n = n + #e.vurgular end
+                    self:koboGonderSor(T(_("%1 kitaptan %2 Kobo vurgusu gönderilsin mi?"), #secilen, n),
+                        function(ozel) self:aktarilanVurgulariSirala(secilen, ozel) end)
+                end,
+            }
+        end
+
+        if #hazir == 0 then return kitapKitapSec() end
+        local baslik = T(_("Kobo'dan gelen ve henüz gönderilmemiş %1 vurgu var (%2 kitap). Hepsi 1000Kitap'a gönderilsin mi?"), toplam, #hazir)
+        if #dogrulanmamis > 0 then
+            baslik = baslik .. "\n" .. T(_("%1 kitabın eşleşmesi doğrulanmadığı için dahil değil; Kitap kitap seç'ten ekleyebilirsin."), #dogrulanmamis)
+        end
+        if eslesmemis > 0 then
+            baslik = baslik .. "\n" .. T(_("%1 kitap 1000Kitap'ta eşleşmediği için atlanacak."), eslesmemis)
+        end
+        self:koboGonderSor(baslik, function(ozel) self:aktarilanVurgulariSirala(hazir, ozel) end,
+            {{ text = _("Kitap kitap seç"), callback = kitapKitapSec }})
+    end
+
     --- 1000Kitap menüsündeki "Kobo Senkron" alt menüsü
     function BinKitap:koboMenusu()
         local eski = self:eskiKoboEklentisi()
@@ -184,6 +331,12 @@ return function(BinKitap)
                 logger.warn("1000Kitap: Kobo menüsü kurulamadı", liste)
             end
         end
+        -- tek tuşla gönderim: "Şimdi senkronize et"in hemen altında
+        table.insert(ogeler, math.min(#ogeler + 1, (eski and 3 or 2)), {
+            text = self.ui.document and _("Bu kitabın Kobo vurgularını 1000Kitap'a gönder") or _("Kobo vurgularını 1000Kitap'a gönder"),
+            help_text = _("Kobo'dan aktarılan ve henüz gönderilmemiş vurguları tek seferde 1000Kitap'a alıntı olarak gönderir. Herkese açık mı gizli mi diye bir kez sorar."),
+            callback = function() self:koboVurgulariniGonder() end,
+        })
         return ogeler
     end
 end

@@ -147,8 +147,8 @@ return function(BinKitap)
             if kutu then kapatiyorum = true; UIManager:close(kutu); kapatiyorum = false end
             local k
             k = InfoMessage:new{
-                text = T(_("KOReader'da bitirdiğin kitaplar aranıyor…\n\n%1 / %2 kitap · %3 bulundu\n\nDurdurmak için dokun."),
-                    i, #dosyalar, #bulunan),
+                text = T(_("KOReader'da bitirdiğin kitaplar aranıyor… %1\n\n%2 / %3 kitap · %4 bulundu\n\nDurdurmak için dokun."),
+                    BinKitap.yuzde(i, #dosyalar), i, #dosyalar, #bulunan),
                 dismiss_callback = function()
                     if kapatiyorum then return end
                     if kutu == k then kutu = nil end
@@ -306,8 +306,12 @@ return function(BinKitap)
                 for _j, v in ipairs(a.vurgular) do
                     local sayfa = ""
                     local pageno = tonumber(v.pageno) or (type(v.page) == "number" and v.page) or nil
+                    local oran = tonumber(v.kobo_oran)
                     if pageno and basili and a.sayfa_sayisi and a.sayfa_sayisi > 0 then
                         sayfa = tostring(math.max(1, math.min(basili, math.floor(pageno / a.sayfa_sayisi * basili + 0.5))))
+                    elseif oran and basili then
+                        -- Kobo'dan aktarılan vurgu: kitabın neresinde olduğu aktarılırken kaydedildi
+                        sayfa = tostring(math.max(1, math.min(basili, math.floor(oran * basili) + 1)))
                     end
                     local soz, notu = kirp(v.text), kirp(v.note)
                     if ozel then

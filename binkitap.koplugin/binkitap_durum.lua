@@ -193,8 +193,8 @@ return function(BinKitap)
                 if kutu then kapatiyorum = true; UIManager:close(kutu); kapatiyorum = false end
                 local k
                 k = InfoMessage:new{
-                    text = T(_("1000Kitap'taki durumlar alınıyor…\n\n%1 / %2 kitap · %3 fark\n\nDurdurmak için dokun."),
-                        i, #dosyalar, #farklar),
+                    text = T(_("1000Kitap'taki durumlar alınıyor… %1\n\n%2 / %3 kitap · %4 fark\n\nDurdurmak için dokun."),
+                        BinKitap.yuzde(i, #dosyalar), i, #dosyalar, #farklar),
                     dismiss_callback = function()
                         if kapatiyorum then return end
                         if kutu == k then kutu = nil end

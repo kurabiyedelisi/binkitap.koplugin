@@ -148,6 +148,20 @@ return function(BinKitap)
     -- Vurguları gönder: hepsi ya da seçerek
     -------------------------------------------------------------------------
 
+    --- Açık kitabın vurgularını sıraya alır ve gönderilmiş diye işaretler.
+    function BinKitap:vurgulariSirala(kitap, secilenler, ozel)
+        local gonderilen = self.ui.doc_settings:readSetting("binkitap_gonderilen") or {}
+        local ogeler = {}
+        for _i, a in ipairs(secilenler) do
+            ogeler[#ogeler + 1] = self:vurgudanOge(kitap, a, ozel)
+            gonderilen[self:vurguAnahtari(a)] = true
+        end
+        self.ui.doc_settings:saveSetting("binkitap_gonderilen", gonderilen)
+        self:topluSiraya(ogeler)
+        self:sirayiGonder(#ogeler)
+        return #ogeler
+    end
+
     function BinKitap:topluGonder()
         local kitap = self:kitapBilgisi()
         if not kitap then
@@ -168,17 +182,10 @@ return function(BinKitap)
             return self:bildir(_("Bu kitapta gönderilmemiş vurgu yok."))
         end
 
-        local function gonder(secilenler, ozel)
-            local ogeler = {}
-            for _i, a in ipairs(secilenler) do
-                ogeler[#ogeler + 1] = self:vurgudanOge(kitap, a, ozel)
-                gonderilen[self:vurguAnahtari(a)] = true
-            end
-            self.ui.doc_settings:saveSetting("binkitap_gonderilen", gonderilen)
-            self:topluSiraya(ogeler)
-            self:sirayiGonder(#ogeler)
-        end
+        local function gonder(secilenler, ozel) self:vurgulariSirala(kitap, secilenler, ozel) end
 
+        local kobodan = 0
+        for _i, a in ipairs(bekleyen) do if a.kobo_id then kobodan = kobodan + 1 end end
         local gizli_once = self.settings:isTrue("alinti_gizli")
         local function gorunurlukSor(secilenler)
             local d
@@ -197,34 +204,41 @@ return function(BinKitap)
         local dialog
         local hepsi_acik = { text = _("Hepsini herkese açık"), callback = function() UIManager:close(dialog); gonder(bekleyen, false) end }
         local hepsi_gizli = { text = _("Hepsini gizli"), callback = function() UIManager:close(dialog); gonder(bekleyen, true) end }
+        local dugmeler = {
+            gizli_once and { hepsi_gizli, hepsi_acik } or { hepsi_acik, hepsi_gizli },
+            {
+                { text = _("Seçerek gönder"), callback = function()
+                    UIManager:close(dialog)
+                    local ogeler = {}
+                    for _i, a in ipairs(bekleyen) do
+                        local pos = a.page or a.pos0
+                        local sayfa = self:basiliSayfa(pos, (type(pos) ~= "string") and a.pageno or nil)
+                        ogeler[#ogeler + 1] = {
+                            metin = kisalt(kirp(a.text):gsub("%s+", " "), 90),
+                            ek = sayfa and T(_("s. %1"), sayfa) or nil,
+                            secili = false,
+                            veri = a,
+                        }
+                    end
+                    self:secimListesi{
+                        baslik = T(_("%1 — vurgular"), kitap.adi),
+                        ogeler = ogeler,
+                        onay_metni = _("Seçilenleri gönder (%1)"),
+                        onay = gorunurlukSor,
+                    }
+                end },
+            },
+        }
+        if kobodan > 0 and self.koboVurgulariniGonder then
+            dugmeler[#dugmeler + 1] = {{ text = T(_("Yalnızca Kobo'dan gelenler (%1)"), kobodan), callback = function()
+                UIManager:close(dialog)
+                self:koboVurgulariniGonder()
+            end }}
+        end
+        dugmeler[#dugmeler + 1] = {{ text = _("Vazgeç"), callback = function() UIManager:close(dialog) end }}
         dialog = ButtonDialog:new{
             title = T(_("Bu kitapta daha önce gönderilmemiş %1 vurgu var.\n\nHerkese açık alıntılar profilinde ve akışta görünür; gizli alıntıları 1000Kitap'ta yalnızca sen görürsün."), #bekleyen),
-            buttons = {
-                gizli_once and { hepsi_gizli, hepsi_acik } or { hepsi_acik, hepsi_gizli },
-                {
-                    { text = _("Seçerek gönder"), callback = function()
-                        UIManager:close(dialog)
-                        local ogeler = {}
-                        for _i, a in ipairs(bekleyen) do
-                            local pos = a.page or a.pos0
-                            local sayfa = self:basiliSayfa(pos, (type(pos) ~= "string") and a.pageno or nil)
-                            ogeler[#ogeler + 1] = {
-                                metin = kisalt(kirp(a.text):gsub("%s+", " "), 90),
-                                ek = sayfa and T(_("s. %1"), sayfa) or nil,
-                                secili = false,
-                                veri = a,
-                            }
-                        end
-                        self:secimListesi{
-                            baslik = T(_("%1 — vurgular"), kitap.adi),
-                            ogeler = ogeler,
-                            onay_metni = _("Seçilenleri gönder (%1)"),
-                            onay = gorunurlukSor,
-                        }
-                    end },
-                },
-                {{ text = _("Vazgeç"), callback = function() UIManager:close(dialog) end }},
-            },
+            buttons = dugmeler,
         }
         UIManager:show(dialog)
     end
@@ -280,7 +294,7 @@ return function(BinKitap)
             end
             local kutu
             kutu = InfoMessage:new{
-                text = T(_("%1\n\n%2 / %3 kitap · %4 eşleşti%5\n\nDurdurmak için dokun."), s.baslik, i, #dosyalar, #eminler, ek or ""),
+                text = T(_("%1 · %2\n\n%3 / %4 kitap · %5 eşleşti%6\n\nDurdurmak için dokun."), s.baslik, BinKitap.yuzde(i, #dosyalar), i, #dosyalar, #eminler, ek or ""),
                 dismiss_callback = function()
                     if kapatiyorum then return end
                     if ilerleme == kutu then ilerleme = nil end

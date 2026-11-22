@@ -301,6 +301,11 @@ function Ctx:locate(rec)
             text = KUtil.cleanupText(doc_text) or KUtil.cleanupText(rec.raw_text) or text,
             chapter = self:chapterOf(best.start),
         }
+        -- kitabın neresinde (0..1): kitap açılmadan basılı sayfa tahmini için
+        local page = self:pageOf(best.start)
+        if page and self.page_count and self.page_count > 0 then
+            res.oran = math.max(0, math.min(1, (page - 1) / self.page_count))
+        end
         if self.opts.cfi then
             res.epubcfi = safe(self.doc.getEPubCFIRangeFromXPointers, self.doc, best.start, best["end"])
         end
