@@ -310,10 +310,30 @@ return function(BinKitap)
             {{ text = _("Kitap kitap seç"), callback = kitapKitapSec }})
     end
 
+    --- Arka planda Kobo aktarımı sürüyor mu (eski eklenti açıksa hayır)
+    function BinKitap:koboArkaSuruyor()
+        return not self:eskiKoboEklentisi() and Kobo.arkaCalisiyor()
+    end
+
+    function BinKitap:koboArkaDurumu()
+        if self.kobo then self.kobo:arkaDurumGoster() end
+    end
+
     --- 1000Kitap menüsündeki "Kobo Senkron" alt menüsü
     function BinKitap:koboMenusu()
         local eski = self:eskiKoboEklentisi()
         local ogeler = {}
+        if self:koboArkaSuruyor() then
+            ogeler[#ogeler + 1] = {
+                text_func = function()
+                    return Kobo.arkaCalisiyor() and T(_("Kobo aktarımı sürüyor · %1"), Kobo.arkaYuzde()) or _("Kobo aktarımı bitti")
+                end,
+                help_text = _("Kobo notları arka planda kitap kitap aktarılıyor. Dokununca ayrıntıyı görür, istersen durdurursun."),
+                keep_menu_open = true,
+                callback = function() self:koboArkaDurumu() end,
+                separator = true,
+            }
+        end
         if eski then
             ogeler[#ogeler + 1] = {
                 text = _("Eski Kobo Senkron eklentisini kapat"),
@@ -332,7 +352,8 @@ return function(BinKitap)
             end
         end
         -- tek tuşla gönderim: "Şimdi senkronize et"in hemen altında
-        table.insert(ogeler, math.min(#ogeler + 1, (eski and 3 or 2)), {
+        local once = (eski and 1 or 0) + (self:koboArkaSuruyor() and 1 or 0)
+        table.insert(ogeler, math.min(#ogeler + 1, once + 2), {
             text = self.ui.document and _("Bu kitabın Kobo vurgularını 1000Kitap'a gönder") or _("Kobo vurgularını 1000Kitap'a gönder"),
             help_text = _("Kobo'dan aktarılan ve henüz gönderilmemiş vurguları tek seferde 1000Kitap'a alıntı olarak gönderir. Herkese açık mı gizli mi diye bir kez sorar."),
             callback = function() self:koboVurgulariniGonder() end,

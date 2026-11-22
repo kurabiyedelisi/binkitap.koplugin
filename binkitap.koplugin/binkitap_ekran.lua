@@ -816,8 +816,13 @@ return function(BinKitap)
             }
             -- Kobo Senkron: Kobo okuyucusundaki notları getir / notlu kitaplara bak
             if self.koboVarMi and self:koboVarMi() then
+                local kobo_ilk = { text = _("Kobo'dan aktar"), callback = kapat_ve(function() self:koboSimdi() end) }
+                if self.koboArkaSuruyor and self:koboArkaSuruyor() then
+                    -- arka planda sürüyor: ne kadarı bitti, dokununca ayrıntı ve Durdur
+                    kobo_ilk = { text = T(_("Kobo aktarımı %1 ›"), BinKitap.Kobo.arkaYuzde()), callback = function() self:koboArkaDurumu() end }
+                end
                 satirlar[#satirlar + 1] = {
-                    { text = _("Kobo'dan aktar"), callback = kapat_ve(function() self:koboSimdi() end) },
+                    kobo_ilk,
                     { text = _("Kobo notları ›"), callback = function() self:koboRapor() end },
                 }
                 satirlar[#satirlar + 1] = {

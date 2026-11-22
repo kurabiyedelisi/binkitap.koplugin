@@ -180,6 +180,12 @@ function Kobo:showQuickDialog()
         {{ text = "Kobo'da notlu kitaplar", callback = function() close(); self:showReport() end }},
         {{ text = "Koleksiyonlar", callback = function() close(); self:showCollections() end }},
     }
+    if Kobo.arkaCalisiyor() then
+        table.insert(buttons, 1, {{
+            text = T("Aktarım sürüyor · %1 ›", Kobo.arkaYuzde()),
+            callback = function() close(); self:arkaDurumGoster() end,
+        }})
+    end
     if self.sahip and self.sahip.koboVurgulariniGonder then
         table.insert(buttons, 2, {{
             text = (self.is_reader and "Bu kitabın Kobo vurgularını 1000Kitap'a gönder" or "Kobo vurgularını 1000Kitap'a gönder"),
@@ -309,6 +315,10 @@ function Kobo:autoScan()
 end
 
 function Kobo:runScan(interactive)
+    if Kobo.arkaCalisiyor() then
+        if interactive then self:arkaDurumGoster() end
+        return
+    end
     if scan_running then
         if interactive then self:showMessage("Kobo senkronu zaten çalışıyor.", 3) end
         return
@@ -354,13 +364,17 @@ function Kobo:doScan(interactive)
     end
 
     local batch_done = true
+    local queue
     if self:getSetting("import_notes") and hasAnnotationSupport() then
         if current then
             batch_done = false -- other books are done from the file browser
         else
-            local stats, complete = self:batchImport(db)
+            local stats, todo = self:batchImport(db)
             summary.notes = stats
-            batch_done = complete
+            if #todo > 0 then
+                queue = todo
+                batch_done = false -- arka plan bitince işaretlenir
+            end
         end
     end
 
@@ -378,6 +392,15 @@ function Kobo:doScan(interactive)
     if current and self:getSetting("import_notes") then
         -- The open book is handled right away, with the book itself.
         self:importCurrentBook(interactive, text)
+        return
+    end
+    if queue then
+        local notes = 0
+        for _, job in ipairs(queue) do notes = notes + #job.pending end
+        if self:arkayaEkle(queue) > 0 then
+            text = (text ~= "" and text .. "\n\n" or "") .. T("Kobo notları arka planda aktarılıyor: %1 kitap, %2 not.\nOkumaya devam edebilirsin; bitince haber vereceğim. Ne kadarının bittiğini Kobo menüsünde ve 1000Kitap ekranında görürsün.", #queue, notes)
+        end
+        self:showMessage("Kobo senkron\n\n" .. text, 8)
         return
     end
     if text ~= "" then
@@ -717,29 +740,9 @@ function Kobo:batchImport(db)
             end
         end
     end
-    if #todo == 0 then return stats, true end
     table.sort(todo, function(a, b) return a.title < b.title end)
-
-    for i, job in ipairs(todo) do
-        -- yüzde: bitmiş kitaplar; her kitap açılıp taranırken ekran değişmez, donmadığını söyle
-        local label = T("Kobo notları aktarılıyor · %1\n\n%2 / %3 kitap: %4\n%5 vurgu/not aranıyor\n\nKitap açılıp taranıyor; büyük kitaplarda bir dakikayı bulabilir.\nDurdurmak için dokun.",
-            "%" .. math.floor((i - 1) / #todo * 100), i, #todo, job.title, #job.pending)
-        local completed, out = Trapper:dismissableRunInSubprocess(function()
-            return Locate.openAndLocate(job.file, job.dom, job.pending, { chapters = true, cfi = true })
-        end, label)
-        if not completed then
-            stats.stopped = true
-            return stats, false
-        end
-        if type(out) == "table" and type(out.results) == "table" then
-            local ok, err = pcall(self.applyToSidecar, self, job, out.results, stats)
-            if not ok then logger.warn("Kobo: could not save", job.file, err) end
-        else
-            logger.warn("Kobo: could not open", job.file, out and out.error)
-            stats.deferred = stats.deferred + 1
-        end
-    end
-    return stats, true
+    -- kitapları açıp taramak uzun sürer: arka planda (Kobo.arkayaEkle)
+    return stats, todo
 end
 
 function Kobo:applyToSidecar(job, results, stats)
@@ -795,6 +798,328 @@ function Kobo:applyToSidecar(job, results, stats)
     ds:saveSetting("kobosync_failed", failed)
     ds:flush()
     resetBookInfoCache(job.file)
+end
+
+---------------------------------------------------------------------------
+-- Arka plan aktarımı
+--
+-- Her kitap ayrı bir süreçte açılıp taranır (KOReader'ın Trapper'ı da böyle yapar,
+-- ama ekranı kilitler). Burada süreç başlatılır ve UIManager üzerinden saniyede bir
+-- bakılır; bu arada KOReader kullanılabilir. Tek sıra var (dosya tarayıcısı ve
+-- okuyucu ortak); açık kitabın işi sıranın başına geçer. Alt süreç ilerlemesini
+-- küçük bir dosyaya yazar, "%23" oradan hesaplanır.
+---------------------------------------------------------------------------
+
+local Arka = { sira = {} }
+
+local function arkaSifirla()
+    Arka.sira, Arka.is = {}, nil
+    Arka.toplam_not, Arka.biten_not = 0, 0
+    Arka.toplam_kitap, Arka.biten_kitap = 0, 0
+    Arka.stats, Arka.basla, Arka.durduruldu = newStats(), os.time(), false
+    Arka.toplu = false -- dosya tarayıcısından gelen (kitap kitap) işler var mı
+end
+arkaSifirla()
+
+local function ilerlemeDosyasi()
+    local kok = lfs.attributes("/tmp", "mode") == "directory" and "/tmp" or (DataStorage:getDataDir() .. "/cache")
+    return kok .. "/binkitap-kobo-ilerleme"
+end
+
+local function ilerlemeOku()
+    local f = io.open(ilerlemeDosyasi(), "r")
+    if not f then return nil end
+    local s = f:read("*a") or ""
+    f:close()
+    local i, n = s:match("^(%d+) (%d+)")
+    return tonumber(i), tonumber(n)
+end
+
+--- Alt süreçte çağrılır: en fazla saniyede bir "i n" yazar.
+local function ilerlemeYazici()
+    local yol, son = ilerlemeDosyasi(), -1
+    return function(i, n)
+        local t = os.time()
+        if i ~= 0 and i ~= n and t == son then return end
+        son = t
+        local f = io.open(yol, "w")
+        if f then
+            f:write(tostring(i), " ", tostring(n))
+            f:close()
+        end
+    end
+end
+
+local function yuzde(i, n)
+    if not n or n <= 0 then return "%0" end
+    return "%" .. math.max(0, math.min(100, math.floor((i or 0) / n * 100)))
+end
+Kobo.yuzde = yuzde
+
+local function sureYazi(sn)
+    sn = math.max(0, math.floor(sn or 0))
+    if sn < 60 then return T("%1 sn", sn) end
+    return T("%1 dk %2 sn", math.floor(sn / 60), string.format("%02d", sn % 60))
+end
+Kobo.sureYazi = sureYazi
+
+--- Alt süreç: okuyucunun önündeki işe CPU'yu bırak (sayfa çevirmek yavaşlamasın).
+local function oncelikDusur()
+    local ffi = require("ffi")
+    pcall(ffi.cdef, "int nice(int inc);")
+    pcall(function() ffi.C.nice(10) end)
+end
+
+--- Açık kitap bu dosyaysa okuyucusu.
+local function acikOkuyucu(file)
+    local ReaderUI = package.loaded["apps/reader/readerui"]
+    local rui = ReaderUI and ReaderUI.instance
+    if rui and rui.document and rui.document.file == file then return rui end
+end
+
+function Kobo.arkaCalisiyor()
+    return Arka.is ~= nil or #Arka.sira > 0
+end
+
+function Kobo.arkaYuzde()
+    local i = Arka.is and ilerlemeOku() or nil
+    return yuzde(Arka.biten_not + (i or 0), Arka.toplam_not)
+end
+
+function Kobo.arkaDurumMetni()
+    if not Kobo.arkaCalisiyor() then return nil end
+    local lines = { T("Kobo notları aktarılıyor · %1", Kobo.arkaYuzde()), "" }
+    local is = Arka.is
+    if is then
+        local i, n = ilerlemeOku()
+        table.insert(lines, T("%1 / %2 kitap: %3", Arka.biten_kitap + 1, Arka.toplam_kitap, is.title))
+        table.insert(lines, (i and n) and T("%1 / %2 not arandı", i, n) or "Kitap açılıyor…")
+        table.insert(lines, T("Bu kitapta: %1", sureYazi(os.time() - (is.basla or os.time()))))
+    end
+    table.insert(lines, T("Toplam: %1", sureYazi(os.time() - Arka.basla)))
+    return table.concat(lines, "\n")
+end
+
+local arkaAdim -- ileri bildirim
+
+local function zamanla(sn)
+    UIManager:unschedule(arkaAdim)
+    UIManager:scheduleIn(sn, arkaAdim)
+end
+
+local function arkaBitti()
+    UIManager:unschedule(arkaAdim)
+    if Arka.uyku then
+        pcall(UIManager.allowStandby, UIManager)
+        Arka.uyku = false
+    end
+    os.remove(ilerlemeDosyasi())
+    local st, sure, durdu = Arka.stats, os.time() - Arka.basla, Arka.durduruldu
+    if Arka.toplu and not durdu then
+        -- bir dahaki taramada bu kitaplara tekrar bakmaya gerek yok
+        local ok, set = pcall(LuaSettings.open, LuaSettings, SETTINGS_FILE)
+        if ok and set then
+            set:saveSetting("batch_pending", false)
+            pcall(set.flush, set)
+        end
+    end
+    local FileManager = package.loaded["apps/filemanager/filemanager"]
+    if FileManager and FileManager.instance and FileManager.instance.file_chooser then
+        pcall(function() FileManager.instance.file_chooser:refreshPath() end)
+    end
+    arkaSifirla()
+    local text = Kobo.summaryText(Kobo, { notes = st })
+    if text == "" then text = "Yeni not bulunamadı." end
+    UIManager:show(InfoMessage:new{
+        text = "Kobo notları aktarıldı\n\n" .. text .. "\n\n" .. T("Süre: %1", sureYazi(sure)),
+        timeout = durdu and 6 or 10,
+    })
+end
+
+--- Bir işi alt süreçte başlatır; başlatamazsa nil.
+local function baslat(job)
+    os.remove(ilerlemeDosyasi())
+    local rui = job.doc and acikOkuyucu(job.file)
+    if job.doc and not (rui and rui.document == job.doc) then
+        -- kitap kapandı (ya da kapanıp yeniden açıldı): kendi başına açılıp taransın
+        job.doc = nil
+        local ok, dom = pcall(function()
+            local cre = require("document/credocument"):engineInit()
+            return domVersionFor(DocSettings:open(job.file), cre)
+        end)
+        if not ok then return nil end
+        job.dom = dom
+    end
+    local ok_buf, buffer = pcall(require, "string.buffer")
+    if not ok_buf then return nil end
+    local doc, opts = job.doc, { chapters = not job.doc, cfi = true, progress = ilerlemeYazici() }
+    local pid, fd = ffiutil.runInSubProcess(function(_pid, child_write_fd)
+        oncelikDusur()
+        local out
+        if doc then
+            local t0 = os.time()
+            local results = Locate.locateAll(doc, job.pending, opts)
+            out = { results = results, search_sec = os.time() - t0, stats = opts.stats }
+        else
+            out = Locate.openAndLocate(job.file, job.dom, job.pending, opts)
+        end
+        local ok, str = pcall(buffer.encode, out)
+        ffiutil.writeToFD(child_write_fd, ok and str or "", true)
+    end, true)
+    job.doc = nil -- alt süreç kendi kopyasını kullanıyor
+    if not pid then return nil end
+    job.pid, job.fd, job.basla = pid, fd, os.time()
+    return job
+end
+
+--- Alt süreç bitti mi? Bittiyse (true, çıktı).
+local function topla(job)
+    local bitti = ffiutil.isSubProcessDone(job.pid)
+    local okunacak = job.fd and ffiutil.getNonBlockingReadSize(job.fd) ~= 0
+    if not (bitti or okunacak) then return false end
+    local out
+    if okunacak then
+        local str = ffiutil.readAllFromFD(job.fd)
+        local ok, t = pcall(function() return require("string.buffer").decode(str) end)
+        if ok and type(t) == "table" then out = t end
+        if not bitti then
+            local pid = job.pid
+            local temizle
+            temizle = function()
+                if not ffiutil.isSubProcessDone(pid) then UIManager:scheduleIn(1, temizle) end
+            end
+            UIManager:scheduleIn(1, temizle)
+        end
+    elseif job.fd then
+        pcall(ffiutil.readAllFromFD, job.fd)
+    end
+    return true, out
+end
+
+local function uygula(job, out)
+    local st = Arka.stats
+    if type(out) ~= "table" or type(out.results) ~= "table" then
+        logger.warn("Kobo: kitap taranamadı", job.file, out and out.error)
+        st.deferred = st.deferred + 1
+        return
+    end
+    local ss = type(out.stats) == "table" and out.stats or {}
+    logger.info(("Kobo: %s: açılış %s sn, arama %s sn, %d not, %s hızlı / %s tam arama"):format(
+        tostring(job.title), tostring(out.open_sec or 0), tostring(out.search_sec or 0), #job.pending,
+        tostring(ss.fast or 0), tostring(ss.full or 0)))
+    local rui = acikOkuyucu(job.file)
+    if rui then
+        -- kitap açık: yan dosyaya yazma (okuyucu kapanırken üstüne yazar), açık kitaba ekle
+        local k = rui.binkitap and rui.binkitap.kobo
+        if k and k.okuyucuyaUygula and rui.annotation and rui.annotation.addItem then
+            local ok, err = pcall(k.okuyucuyaUygula, k, job.pending, out.results, st, job.interactive)
+            if ok then return end
+            logger.warn("Kobo: açık kitaba eklenemedi", err)
+        end
+        st.deferred = st.deferred + 1
+        return
+    end
+    local ok, err = pcall(Kobo.applyToSidecar, Kobo, job, out.results, st)
+    if not ok then logger.warn("Kobo: could not save", job.file, err) end
+end
+
+arkaAdim = function()
+    if Arka.is then
+        local done, out = topla(Arka.is)
+        if not done then return zamanla(1) end
+        local job = Arka.is
+        Arka.is = nil
+        os.remove(ilerlemeDosyasi())
+        uygula(job, out)
+        Arka.biten_not = Arka.biten_not + #job.pending
+        Arka.biten_kitap = Arka.biten_kitap + 1
+    end
+    while #Arka.sira > 0 do
+        local job = table.remove(Arka.sira, 1)
+        local ok, started = pcall(baslat, job)
+        if ok and started then
+            Arka.is = started
+            return zamanla(1)
+        end
+        logger.warn("Kobo: arka plan işi başlatılamadı", job.file, started)
+        Arka.stats.deferred = Arka.stats.deferred + 1
+        Arka.biten_not = Arka.biten_not + #job.pending
+        Arka.biten_kitap = Arka.biten_kitap + 1
+    end
+    arkaBitti()
+end
+
+--- İşleri sıraya ekler (one: sıranın başına). Eklenen iş sayısını döner.
+function Kobo:arkayaEkle(jobs, one)
+    local idle = not Kobo.arkaCalisiyor()
+    if idle then arkaSifirla() end
+    local added = 0
+    for _, job in ipairs(jobs) do
+        local busy = Arka.is and Arka.is.file == job.file
+        if not busy then
+            for i = #Arka.sira, 1, -1 do
+                if Arka.sira[i].file == job.file then
+                    -- aynı kitap zaten sırada: yenisi (ör. açık kitap) onun yerini alır
+                    Arka.toplam_not = Arka.toplam_not - #Arka.sira[i].pending
+                    Arka.toplam_kitap = Arka.toplam_kitap - 1
+                    table.remove(Arka.sira, i)
+                end
+            end
+            if one then table.insert(Arka.sira, 1, job) else table.insert(Arka.sira, job) end
+            if not job.reader then Arka.toplu = true end
+            Arka.toplam_not = Arka.toplam_not + #job.pending
+            Arka.toplam_kitap = Arka.toplam_kitap + 1
+            added = added + 1
+        end
+    end
+    if idle and added > 0 then
+        if UIManager.preventStandby then
+            pcall(UIManager.preventStandby, UIManager)
+            Arka.uyku = true
+        end
+        zamanla(0.5)
+    end
+    return added
+end
+
+--- Durdurur: bitenler kaydedilmiştir, kalanlar bir sonraki taramada sürer.
+function Kobo.arkaDurdur()
+    local job = Arka.is
+    if job and job.pid then
+        pcall(ffiutil.terminateSubProcess, job.pid)
+        local pid, fd = job.pid, job.fd
+        local temizle
+        temizle = function()
+            if ffiutil.isSubProcessDone(pid) then
+                if fd then pcall(ffiutil.readAllFromFD, fd) end
+            else
+                if fd and ffiutil.getNonBlockingReadSize(fd) ~= 0 then
+                    pcall(ffiutil.readAllFromFD, fd)
+                    fd = nil
+                end
+                UIManager:scheduleIn(5, temizle)
+            end
+        end
+        UIManager:scheduleIn(5, temizle)
+    end
+    Arka.is, Arka.sira, Arka.durduruldu = nil, {}, true
+    Arka.stats.stopped = true
+    arkaBitti()
+end
+
+function Kobo:arkaDurumGoster()
+    local text = Kobo.arkaDurumMetni()
+    if not text then return self:showMessage("Kobo aktarımı bitti.", 3) end
+    local dialog
+    dialog = ButtonDialog:new{
+        title = text .. "\n\nOkumaya devam edebilirsin; bitince haber vereceğim. Durdurursan bitenler kaydedilir, kalanlar bir sonraki taramada sürer.",
+        title_align = "left",
+        buttons = {
+            {{ text = "Durdur", callback = function() UIManager:close(dialog); Kobo.arkaDurdur() end }},
+            {{ text = "Kapat", callback = function() UIManager:close(dialog) end }},
+        },
+    }
+    UIManager:show(dialog)
 end
 
 -- the book open in the reader
@@ -876,20 +1201,26 @@ function Kobo:liveImport(file, recs, interactive)
     local pending = self:pendingRecords(recs, imported, failed)
     if #pending == 0 then return nil end
 
-    local doc = self.ui.document
-    local completed, results = Trapper:dismissableRunInSubprocess(function()
-        return Locate.locateAll(doc, pending, { cfi = true })
-    end, T("Kobo'dan %1 vurgu/not ekleniyor…\n\nKitapta aranıyor; uzun kitaplarda biraz sürebilir.\nDurdurmak için dokun.", #pending))
-    if not completed or type(results) ~= "table" then
-        return "Aktarımı durdurdun; kalanlar kitabı bir sonraki açışında eklenecek."
-    end
+    local title = (self.ui.doc_props and self.ui.doc_props.display_title) or basename(file)
+    local added = self:arkayaEkle({{
+        file = file, pending = pending, doc = self.ui.document, title = title,
+        reader = true, interactive = interactive,
+    }}, true)
+    if added == 0 then return nil end -- bu kitap zaten taranıyor
+    return T("Bu kitabın %1 Kobo notu arka planda ekleniyor; okumaya devam edebilirsin.", #pending)
+end
 
-    local stats = newStats()
+--- Arka plandan gelen sonuçları açık kitaba ekler (kitap hâlâ açıksa).
+function Kobo:okuyucuyaUygula(pending, results, stats, interactive)
+    local ds = self.ui.doc_settings
+    local imported = ds:readSetting("kobosync_imported") or {}
+    local failed = interactive and {} or (ds:readSetting("kobosync_failed") or {})
     local by_id = {}
     for _, rec in ipairs(pending) do by_id[rec.id] = rec end
     local drawer = self.view and self.view.highlight and self.view.highlight.saved_drawer or defaultDrawer()
     local color = self.view and self.view.highlight and self.view.highlight.saved_color or defaultColor()
     local annotations = self.ui.annotation.annotations
+    local added = 0
 
     local function chapterFor(xp, fallback)
         local ok, title = pcall(function()
@@ -904,11 +1235,12 @@ function Kobo:liveImport(file, recs, interactive)
 
     for _, r in ipairs(results) do
         local rec = by_id[r.id]
-        if rec then
+        if rec and not imported[rec.id] then
             if r.status == "ok" then
                 local item = self:makeHighlightItem(rec, r, drawer, color, chapterFor(r.pos0, r.chapter))
                 if not hasSameAnnotation(annotations, item) then
                     local index = self.ui.annotation:addItem(item)
+                    added = added + 1
                     if item.note then
                         stats.notes = stats.notes + 1
                         self.ui:handleEvent(Event:new("AnnotationsModified", { item, nb_notes_added = 1, index_modified = index }))
@@ -923,6 +1255,7 @@ function Kobo:liveImport(file, recs, interactive)
                 local item = self:makeBookmarkItem(rec, r, chapterFor(r.page, r.chapter))
                 if not hasSameAnnotation(annotations, item) or not r.dogear then
                     local index = self.ui.annotation:addItem(item)
+                    added = added + 1
                     self.ui:handleEvent(Event:new("AnnotationsModified", { item, index_modified = index }))
                     if r.dogear then stats.bookmarks = stats.bookmarks + 1 else stats.approx = stats.approx + 1 end
                 end
@@ -934,6 +1267,7 @@ function Kobo:liveImport(file, recs, interactive)
             end
         end
     end
+    if added > 0 then stats.books = stats.books + 1 end
 
     -- keep the earlier failures we did not retry
     local old_failed = ds:readSetting("kobosync_failed") or {}
@@ -945,21 +1279,6 @@ function Kobo:liveImport(file, recs, interactive)
     pcall(function() self.view.footer:maybeUpdateFooter() end)
     pcall(function() self.ui:saveSettings() end)
     UIManager:setDirty(self.dialog or self.ui, "ui")
-
-    local lines = {}
-    if stats.highlights + stats.notes > 0 then
-        table.insert(lines, T("Bu kitaba Kobo'dan %1 vurgu ve %2 not eklendi.", stats.highlights, stats.notes))
-    end
-    if stats.bookmarks > 0 then
-        table.insert(lines, T("%1 Kobo yer imi eklendi.", stats.bookmarks))
-    end
-    if stats.approx > 0 then
-        table.insert(lines, T("%1 vurgunun tam yeri bulunamadı; yaklaşık konumuna not içeren yer imi olarak eklendi.", stats.approx))
-    end
-    if stats.failed > 0 then
-        table.insert(lines, T("%1 not/vurgu kitapta bulunamadı.", stats.failed))
-    end
-    return #lines > 0 and table.concat(lines, "\n") or nil
 end
 
 function Kobo:currentPercent()

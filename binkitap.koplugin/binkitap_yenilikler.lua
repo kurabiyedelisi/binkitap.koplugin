@@ -3,6 +3,15 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.2",
+        maddeler = {
+            "Kobo notları arka planda aktarılıyor: ekran kilitlenmiyor, okumaya devam edebilirsin. Ne kadarının bittiği Kobo menüsünde ve 1000Kitap ekranında yüzde olarak görünür; bitince kısa bir özet çıkar. İstersen durdurursun; bitenler kaydedilir, kalanlar bir sonraki taramada sürer.",
+            "Çok daha hızlı: her not artık bütün kitapta değil, Kobo'nun kaydettiği bölümde, bulunduğu yerin biraz öncesinden aranır. Orada bulunamazsa eskisi gibi bütün kitapta aranır.",
+            "Açtığın kitabın yeni Kobo notları da arka planda eklenir; kitap açılırken beklemezsin. Arka plan işi düşük öncelikle çalışır, sayfa çevirmek yavaşlamaz.",
+            "Aktarım sırasında arkada kalan \"Kobo veritabanı okunuyor\" kutusu düzeltildi.",
+        },
+    },
+    {
         surum = "1.3.1",
         maddeler = {
             "Kobo vurgularını tek tuşla 1000Kitap'a gönder: 1000Kitap ekranında, Kobo Senkron menüsünde ve Kobo hızlı menüsünde. Okurken o kitabınkileri, dosya tarayıcısında bütün kitaplarınkileri gönderir; herkese açık mı gizli mi diye bir kez sorar. Daha önce aktarılmış Kobo vurguları da tanınır.",

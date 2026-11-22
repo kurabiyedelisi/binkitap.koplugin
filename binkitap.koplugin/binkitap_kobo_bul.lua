@@ -9,6 +9,13 @@ words appear more than once.
 
 This module only calls document methods: it is run in a subprocess, either
 on the book open in the reader, or on a book opened just for this.
+
+Hız: crengine'in findAllText'i her çağrıda bütün kitabı tarar; büyük bir kitapta
+yüzlerce not için bu dakikalar sürer. Kobo notun hangi bölümde ve bölümün neresinde
+olduğunu bildiği için önce findText ile o noktanın biraz öncesinden ileri aranır
+(crengine ilk eşleşmeden ~2 sayfa sonra durur). Orada bulunamazsa ya da bulunan yer
+Kobo'nun söylediği yerden uzaksa (aynı cümle başka yerde de geçebilir) eskisi gibi
+bütün kitapta aranır.
 --]]
 
 local KUtil = require("binkitap_kobo_util")
@@ -21,6 +28,7 @@ local Locate = {
     MAX_HITS = 60,
     FULL_SEARCH_MAX_WORDS = 40,
     EDGE_WORDS = 8,
+    NEAR_PAGES = 3, -- Kobo'nun söylediği yerden bu kadar sayfa önceden aramaya başla
 }
 
 local function safe(fn, ...)
@@ -39,6 +47,7 @@ function Locate.newContext(doc, opts)
         opts = opts or {},
         page_cache = {},
         frag_start = {},
+        stats = { fast = 0, full = 0 }, -- kaç hızlı (bölümde) ve tam (bütün kitap) arama
     }, Ctx)
     ctx.page_count = safe(doc.getPageCount, doc) or 0
     ctx:initSpine()
@@ -133,9 +142,7 @@ function Ctx:chapterOf(xp)
     return nil
 end
 
-function Ctx:search(pattern)
-    if not pattern or pattern == "" then return {} end
-    local res = safe(self.doc.findAllText, self.doc, pattern, true, 0, Locate.MAX_HITS, false, Locate.SEARCH_FLAGS)
+local function toHits(res)
     local hits = {}
     if type(res) == "table" then
         for _, r in ipairs(res) do
@@ -145,6 +152,66 @@ function Ctx:search(pattern)
         end
     end
     return hits
+end
+
+--- Whole-book search (slow on big books).
+function Ctx:search(pattern)
+    if not pattern or pattern == "" then return {} end
+    self.stats.full = self.stats.full + 1
+    return toHits(safe(self.doc.findAllText, self.doc, pattern, true, 0, Locate.MAX_HITS, false, Locate.SEARCH_FLAGS))
+end
+
+--- Page where Kobo says the record is (nil if unknown).
+function Ctx:expectedPage(frag, progress)
+    progress = tonumber(progress)
+    if not frag or not progress then return nil end
+    local s, e = self:fragPageRange(frag)
+    if not s then return nil end
+    if progress < 0 then progress = 0 elseif progress > 1 then progress = 1 end
+    return s + progress * (e - 1 - s)
+end
+
+--- Searches forward from a position (crengine stops shortly after the first hit).
+function Ctx:searchForward(xp, pattern)
+    if type(self.doc.findText) ~= "function" or type(self.doc.gotoXPointer) ~= "function" then return nil end
+    if not pcall(self.doc.gotoXPointer, self.doc, xp) then return nil end
+    self.stats.fast = self.stats.fast + 1
+    -- origin 0, direction 0: from the current page to the end of the book
+    return toHits(safe(self.doc.findText, self.doc, pattern, 0, 0, true, nil, false, Locate.MAX_HITS, Locate.SEARCH_FLAGS))
+end
+
+--- Fast search inside chapter file `frag`, starting a few pages before where
+-- Kobo says the record is, then from the chapter start. Returns hits in that
+-- chapter, or nil (then the caller searches the whole book).
+function Ctx:searchNear(pattern, frag, progress)
+    if not frag or not pattern or pattern == "" or self.opts.fast == false then return nil end
+    local starts = {}
+    local target = self:expectedPage(frag, progress)
+    local s = self:fragStartPage(frag)
+    if target and s then
+        local p = math.floor(target) - Locate.NEAR_PAGES
+        if p > s then
+            local xp = safe(self.doc.getPageXPointer, self.doc, p)
+            if xp then starts[#starts + 1] = xp end
+        end
+    end
+    starts[#starts + 1] = self:fragXPointer(frag)
+    for _, xp in ipairs(starts) do
+        local hits = self:searchForward(xp, pattern)
+        if not hits then return nil end -- engine can't do it
+        local same = self:inFrag(hits, frag)
+        if #same > 0 then return same end
+    end
+    return nil
+end
+
+--- Is this hit where Kobo says the record is? (true when we can't tell)
+function Ctx:nearExpected(hit, frag, progress)
+    local target = self:expectedPage(frag, progress)
+    if not target then return true end
+    local p = self:pageOf(hit.start)
+    if not p then return true end
+    return math.abs(p - target) <= Locate.NEAR_PAGES + 1
 end
 
 function Ctx:inFrag(hits, frag)
@@ -193,7 +260,7 @@ end
 --- Long or multi-paragraph highlights: search the first and the last words
 -- (taken from the first and last paragraph Kobo stored), with fewer words
 -- if needed, and keep the pair that spans the right amount of text.
-function Ctx:headTail(rec, words, target_len, frag)
+function Ctx:headTail(rec, words, target_len, frag, near)
     local segs = {}
     for line in ((rec.raw_text or "") .. "\n"):gmatch("([^\n]*)\n") do
         local w = KUtil.splitWords(KUtil.normalize(line))
@@ -219,9 +286,19 @@ function Ctx:headTail(rec, words, target_len, frag)
         local key = head .. "\0" .. tail
         if not tried[key] then
             tried[key] = true
-            local heads = self:search(head)
+            local heads
+            if near then
+                heads = self:searchNear(head, frag, rec.progress) or {}
+            else
+                heads = self:search(head)
+            end
             if #heads > 0 then
-                local tails = self:search(tail)
+                local tails
+                if near then
+                    tails = self:searchNear(tail, frag, rec.progress) or {}
+                else
+                    tails = self:search(tail)
+                end
                 if #tails > 0 then
                     local out = self:pairEdges(heads, tails, target_len, frag)
                     if #out > 0 then return out end
@@ -283,14 +360,30 @@ function Ctx:locate(rec)
 
     local text = rec.text or ""
     local words = KUtil.splitWords(text)
-    local cands = {}
-    if #words > 0 and #words <= Locate.FULL_SEARCH_MAX_WORDS then
-        cands = self:search(text)
+    local short = #words > 0 and #words <= Locate.FULL_SEARCH_MAX_WORDS
+    local best
+    -- 1) fast: near where Kobo says it is
+    if frag then
+        local near = short and self:searchNear(text, frag, rec.progress) or nil
+        if (not near or #near == 0) and #words >= 4 then
+            near = self:headTail(rec, words, #text, frag, true)
+        end
+        if near and #near > 0 then
+            local b = self:pick(near, frag, rec.progress)
+            if b and self:nearExpected(b, frag, rec.progress) then best = b end
+        end
     end
-    if #cands == 0 and #words >= 4 then
-        cands = self:headTail(rec, words, #text, frag)
+    -- 2) the whole book, as before
+    if not best then
+        local cands = {}
+        if short then
+            cands = self:search(text)
+        end
+        if #cands == 0 and #words >= 4 then
+            cands = self:headTail(rec, words, #text, frag)
+        end
+        best = self:pick(cands, frag, rec.progress)
     end
-    local best = self:pick(cands, frag, rec.progress)
     if best then
         local doc_text = safe(self.doc.getTextFromXPointers, self.doc, best.start, best["end"])
         local res = {
@@ -325,7 +418,9 @@ end
 function Locate.locateAll(doc, records, opts)
     local results = {}
     local ok_ctx, ctx = pcall(Locate.newContext, doc, opts)
+    local progress = opts and opts.progress
     for i, rec in ipairs(records) do
+        if progress then pcall(progress, i - 1, #records) end
         local ok, res
         if ok_ctx then
             ok, res = pcall(ctx.locate, ctx, rec)
@@ -336,6 +431,8 @@ function Locate.locateAll(doc, records, opts)
             results[i] = { id = rec.id, status = "fail", error = tostring(res or ctx) }
         end
     end
+    if progress then pcall(progress, #records, #records) end
+    if ok_ctx and opts then opts.stats = ctx.stats end
     return results
 end
 
@@ -343,6 +440,7 @@ end
 -- Meant to run in a subprocess. dom_version must match the book's sidecar,
 -- so that XPointers are the ones the reader will use.
 function Locate.openAndLocate(path, dom_version, records, opts)
+    local t0 = os.time()
     local DocumentRegistry = require("document/documentregistry")
     local doc = DocumentRegistry:openDocument(path)
     if not doc then
@@ -358,7 +456,10 @@ function Locate.openAndLocate(path, dom_version, records, opts)
             return { error = "load" }
         end
         doc:render()
-        return { results = Locate.locateAll(doc, records, opts) }
+        local t_open = os.time()
+        local results = Locate.locateAll(doc, records, opts)
+        return { results = results, open_sec = t_open - t0, search_sec = os.time() - t_open,
+                 stats = opts and opts.stats }
     end)
     pcall(doc.close, doc)
     if not ok then

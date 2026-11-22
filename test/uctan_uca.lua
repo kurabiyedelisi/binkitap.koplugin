@@ -426,9 +426,27 @@ package.preload["ui/widget/container/widgetcontainer"] = function()
   return { extend = function(_, o) o.new = function(cls, inst) setmetatable(inst, { __index = cls }); if inst.init then inst:init() end; return inst end; return o end }
 end
 package.preload["gettext"] = function() return function(s) return s end end
+rawset(_G, "ALT", { sayi = 0, bekle = false, fd = {}, durdurulan = 0 })
 package.preload["ffi/util"] = function()
   return { template = function(s, ...) local p = { ... }; return (s:gsub("%%(%d)", function(i) return tostring(p[tonumber(i)]) end)) end,
-           realpath = function(p) return p end }
+           realpath = function(p) return p end,
+           runInSubProcess = function(f)
+             ALT.sayi = ALT.sayi + 1
+             local fd = { veri = "" }
+             f(ALT.sayi, fd)
+             return ALT.sayi, fd
+           end,
+           writeToFD = function(fd, s) fd.veri = s end,
+           isSubProcessDone = function() return not ALT.bekle end,
+           getNonBlockingReadSize = function(fd) return ALT.bekle and 0 or #fd.veri end,
+           readAllFromFD = function(fd) local v = fd.veri; fd.veri = ""; return v end,
+           terminateSubProcess = function() ALT.durdurulan = ALT.durdurulan + 1 end }
+end
+-- LuaJIT'in string.buffer'ı yok: tabloyu bir anahtarla sakla
+package.preload["string.buffer"] = function()
+  local depo, n = {}, 0
+  return { encode = function(t) n = n + 1; depo["b" .. n] = t; return "b" .. n end,
+           decode = function(s) return depo[s] end }
 end
 local eylemler = {}
 package.preload["dispatcher"] = function() return { registerAction = function(_, ad, t) eylemler[ad] = t end } end
@@ -1178,16 +1196,16 @@ fm.settings:saveSetting("kitapliga_ekle", nil)
 do
 print("28) GitHub'dan güncelleme")
 local G = Plugin._guncelleme
-kontrol(Plugin.SURUM == "1.3.1", "sürüm _meta.lua'dan okundu: " .. tostring(Plugin.SURUM))
-kontrol(G.dahaYeni("1.2.30", "1.2.9") and G.dahaYeni("1.3", "1.2.9") and not G.dahaYeni("1.3.4", "1.3.4")
-  and not G.dahaYeni("1.3.3", "1.3.4"), "sürüm karşılaştırma sayıyla yapılıyor")
+kontrol(Plugin.SURUM == "1.3.2", "sürüm _meta.lua'dan okundu: " .. tostring(Plugin.SURUM))
+kontrol(G.dahaYeni("1.2.30", "1.2.9") and G.dahaYeni("1.3", "1.2.9") and not G.dahaYeni("1.3.5", "1.3.5")
+  and not G.dahaYeni("1.3.4", "1.3.5"), "sürüm karşılaştırma sayıyla yapılıyor")
 local ayar_ogeleri = fm:ayarlarMenusu()
 local gun_oge, oto_oge
 for _, o in ipairs(ayar_ogeleri) do
   if o.text and o.text:find("^Güncellemeleri denetle") then gun_oge = o end
   if o.text == "Haftada bir kendiliğinden denetle" then oto_oge = o end
 end
-kontrol(gun_oge and gun_oge.text == "Güncellemeleri denetle (sürüm 1.3.1)" and oto_oge and oto_oge.checked_func(),
+kontrol(gun_oge and gun_oge.text == "Güncellemeleri denetle (sürüm 1.3.2)" and oto_oge and oto_oge.checked_func(),
   "ayarlarda denetle düğmesi ve varsayılan açık haftalık denetim")
 
 local DIZ = GERCEK .. "/binkitap.koplugin"
@@ -1195,7 +1213,7 @@ gercek_lfs.mkdir(GERCEK); gercek_lfs.mkdir(DIZ)
 local function yaz(yol, m) local h = assert(io.open(yol, "wb")); h:write(m); h:close() end
 local function oku(yol) local h = io.open(yol, "rb"); if not h then return nil end; local m = h:read("*a"); h:close(); return m end
 yaz(DIZ .. "/main.lua", "-- eski main\n")
-yaz(DIZ .. "/_meta.lua", 'return { version = "1.3.1" }\n')
+yaz(DIZ .. "/_meta.lua", 'return { version = "1.3.2" }\n')
 yaz(DIZ .. "/ayar.lua", 'return { oturum_kodu = "GIZLI" }\n')
 fm.path = DIZ
 
@@ -1225,25 +1243,25 @@ local function depoKur(surum, dosyalar, bozuk)
   GITHUB[listeAdres("main")] = encode(liste)
 end
 
-depoKur("1.3.1", { ["main.lua"] = "-- aynı\n" })
+depoKur("1.3.2", { ["main.lua"] = "-- aynı\n" })
 fm:guncellemeDenetle(false)
-kontrol(son("InfoMessage").text == "En son sürümü kullanıyorsun (1.3.1).", "güncel: " .. son("InfoMessage").text)
+kontrol(son("InfoMessage").text == "En son sürümü kullanıyorsun (1.3.2).", "güncel: " .. son("InfoMessage").text)
 kontrol(fm.settings:readSetting("guncelleme_son_denetim") == os.time(), "denetim zamanı kaydedildi")
 
 GITHUB[depo.ham .. "_meta.lua"] = 503
 fm:guncellemeDenetle(false)
 kontrol(son("InfoMessage").text:find("HTTP 503", 1, true) ~= nil, "hata gösterildi: " .. son("InfoMessage").text)
 
-depoKur("1.3.2", { ["main.lua"] = "-- yeni main\nreturn 1\n", ["binkitap_yeni.lua"] = "return {}\n", ["ayar.lua"] = "return { oturum_kodu = \"SIFIRLANDI\" }\n",
-  ["binkitap_yenilikler.lua"] = 'return { { surum = "1.3.2", maddeler = { "Yeni şey bir", "Yeni şey iki" } }, { surum = "1.3.1", maddeler = { "Eski şey" } } }\n' })
+depoKur("1.3.3", { ["main.lua"] = "-- yeni main\nreturn 1\n", ["binkitap_yeni.lua"] = "return {}\n", ["ayar.lua"] = "return { oturum_kodu = \"SIFIRLANDI\" }\n",
+  ["binkitap_yenilikler.lua"] = 'return { { surum = "1.3.3", maddeler = { "Yeni şey bir", "Yeni şey iki" } }, { surum = "1.3.2", maddeler = { "Eski şey" } } }\n' })
 fm:guncellemeDenetle(false)
 local gk = son("ConfirmBox")
-kontrol(gk and gk.text:find("yeni sürümü var: 1.3.2 (sendeki 1.3.1)", 1, true) ~= nil, "yeni sürüm soruldu")
+kontrol(gk and gk.text:find("yeni sürümü var: 1.3.3 (sendeki 1.3.2)", 1, true) ~= nil, "yeni sürüm soruldu")
 kontrol(gk.text:find("Yenilikler:\n• Yeni şey bir\n• Yeni şey iki", 1, true) and not gk.text:find("Eski şey", 1, true),
   "onay penceresinde yalnızca yeni sürümün notları: " .. gk.text:gsub("\n", " / "))
 gk.ok_callback()
 kontrol(oku(DIZ .. "/main.lua") == "-- yeni main\nreturn 1\n" and oku(DIZ .. "/binkitap_yeni.lua") == "return {}\n"
-  and oku(DIZ .. "/_meta.lua"):find("1.3.2", 1, true), "yeni dosyalar yerinde")
+  and oku(DIZ .. "/_meta.lua"):find("1.3.3", 1, true), "yeni dosyalar yerinde")
 kontrol(oku(DIZ .. "/ayar.lua") == 'return { oturum_kodu = "GIZLI" }\n', "ayar.lua'ya dokunulmadı")
 local ayar_istendi = false
 local sabit_indirme, dal_indirme = false, false
@@ -1256,64 +1274,64 @@ kontrol(sabit_indirme and not dal_indirme, "dosyalar commit'e sabit adresten ind
 kontrol(not ayar_istendi, "depodaki ayar.lua indirilmedi bile")
 kontrol(oku(DIZ .. "/.yedek/main.lua") == "-- eski main\n", "eski sürüm .yedek'te")
 kontrol(gercek_lfs.attributes(DIZ .. "/.guncelleme/main.lua", "mode") == nil, "geçici klasörde dosya kalmadı")
-kontrol(son("Restart") and son("Restart").text:find("1.3.2", 1, true), "yeniden başlatma istendi")
-kontrol(fm.settings:readSetting("guncelleme_kurulan") == "1.3.2", "kurulan sürüm kaydedildi")
+kontrol(son("Restart") and son("Restart").text:find("1.3.3", 1, true), "yeniden başlatma istendi")
+kontrol(fm.settings:readSetting("guncelleme_kurulan") == "1.3.3", "kurulan sürüm kaydedildi")
 fm:guncellemeDenetle(false)
-kontrol(son("InfoMessage").text:find("1.3.2 zaten indirildi", 1, true) ~= nil, "yeniden başlatmadan önce tekrar sormuyor")
+kontrol(son("InfoMessage").text:find("1.3.3 zaten indirildi", 1, true) ~= nil, "yeniden başlatmadan önce tekrar sormuyor")
 
 local once_main = oku(DIZ .. "/main.lua")
-depoKur("1.3.3", { ["main.lua"] = "bu lua değil (\n" })
-fm:guncellemeKur("1.3.3")
+depoKur("1.3.4", { ["main.lua"] = "bu lua değil (\n" })
+fm:guncellemeKur("1.3.4")
 kontrol(son("InfoMessage").text:find("main.lua bozuk", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "bozuk dosya: hiçbir şey değişmedi")
-depoKur("1.3.3", { ["main.lua"] = "return 2\n" }, { boyut = "main.lua" })
-fm:guncellemeKur("1.3.3")
+depoKur("1.3.4", { ["main.lua"] = "return 2\n" }, { boyut = "main.lua" })
+fm:guncellemeKur("1.3.4")
 kontrol(son("InfoMessage").text:find("main.lua tam inmedi", 1, true) and son("InfoMessage").text:find("birkaç dakika sonra", 1, true)
   and oku(DIZ .. "/main.lua") == once_main, "eksik indirme: hiçbir şey değişmedi")
-depoKur("1.3.3", { ["main.lua"] = "return 2\n", ["resimler"] = "x" }, { klasor = "resimler" })
-fm:guncellemeKur("1.3.3")
+depoKur("1.3.4", { ["main.lua"] = "return 2\n", ["resimler"] = "x" }, { klasor = "resimler" })
+fm:guncellemeKur("1.3.4")
 kontrol(son("InfoMessage").text:find("elle kurulmalı", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "yeni klasör içeren sürüm otomatik kurulmadı")
 
 -- yayından hemen sonra: dal adresleri (ham önbellek) hâlâ eski dosyaları veriyor
-depoKur("1.3.3", { ["main.lua"] = "return 24\n", ["binkitap_yenilikler.lua"] = 'return { { surum = "1.3.3", maddeler = { "Dört" } } }\n' })
-GITHUB[HAM .. "_meta.lua"] = 'return { version = "1.3.2" }\n'
+depoKur("1.3.4", { ["main.lua"] = "return 24\n", ["binkitap_yenilikler.lua"] = 'return { { surum = "1.3.4", maddeler = { "Dört" } } }\n' })
+GITHUB[HAM .. "_meta.lua"] = 'return { version = "1.3.3" }\n'
 GITHUB[HAM .. "main.lua"] = "-- yeni main\nreturn 1\n"
 GITHUB[HAM .. "binkitap_yenilikler.lua"] = 'return {}\n'
 fm.settings:delSetting("guncelleme_kurulan")
 fm:guncellemeDenetle(false)
 local bk = son("ConfirmBox")
-kontrol(bk and bk.text:find("yeni sürümü var: 1.3.3", 1, true) and bk.text:find("• Dört", 1, true),
+kontrol(bk and bk.text:find("yeni sürümü var: 1.3.4", 1, true) and bk.text:find("• Dört", 1, true),
   "bayat önbellekte bile yeni sürüm ve notları görüldü")
 bk.ok_callback()
-kontrol(oku(DIZ .. "/main.lua") == "return 24\n" and oku(DIZ .. "/_meta.lua"):find("1.3.3", 1, true),
+kontrol(oku(DIZ .. "/main.lua") == "return 24\n" and oku(DIZ .. "/_meta.lua"):find("1.3.4", 1, true),
   "bayat önbellek: commit'e sabit dosyalar kuruldu")
-kontrol(son("Restart") and son("Restart").text:find("1.3.3", 1, true), "bayat önbellek: kurulum tamamlandı")
+kontrol(son("Restart") and son("Restart").text:find("1.3.4", 1, true), "bayat önbellek: kurulum tamamlandı")
 once_main = oku(DIZ .. "/main.lua")
 
 -- commit bulunamazsa dal adreslerine düşer; eski dosyalarla karışık kurulum yapmaz
 GITHUB[REF] = 403
-GITHUB[HAM .. "_meta.lua"] = 'return { version = "1.3.1" }\n'
+GITHUB[HAM .. "_meta.lua"] = 'return { version = "1.3.2" }\n'
 GITHUB[listeAdres("main")] = encode({ { type = "file", name = "_meta.lua", size = #GITHUB[HAM .. "_meta.lua"] },
   { type = "file", name = "main.lua", size = #GITHUB[HAM .. "main.lua"] } })
-fm:guncellemeKur("1.3.4")
+fm:guncellemeKur("1.3.5")
 kontrol(son("InfoMessage").text:find("henüz yeni sürümün dosyalarını vermiyor", 1, true) and oku(DIZ .. "/main.lua") == once_main,
   "dal adresi eski sürümü verince kurulum yapılmadı")
-depoKur("1.3.4", { ["main.lua"] = "return 25\n" })
+depoKur("1.3.5", { ["main.lua"] = "return 25\n" })
 GITHUB[REF] = 404
-fm:guncellemeKur("1.3.4")
+fm:guncellemeKur("1.3.5")
 kontrol(oku(DIZ .. "/main.lua") == "return 25\n", "commit bulunamayınca dal adresleriyle kuruldu")
 fm.settings:delSetting("guncelleme_kurulan")
 
 -- haftalık sessiz denetim
-depoKur("1.3.4", { ["main.lua"] = "return 3\n" })
+depoKur("1.3.5", { ["main.lua"] = "return 3\n" })
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 2 * 24 * 3600)
 fm:onNetworkConnected(); calistir()
-kontrol(son("ConfirmBox") == gk or not son("ConfirmBox").text:find("1.3.4", 1, true), "iki gün önce denetlendiyse sormadı")
+kontrol(son("ConfirmBox") == gk or not son("ConfirmBox").text:find("1.3.5", 1, true), "iki gün önce denetlendiyse sormadı")
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 8 * 24 * 3600)
 fm:onNetworkConnected(); fm2:onNetworkConnected(); calistir()
 local sorular = 0
-for _, w in ipairs(gosterilen) do if w._tur == "ConfirmBox" and w.text:find("1.3.4", 1, true) then sorular = sorular + 1 end end
+for _, w in ipairs(gosterilen) do if w._tur == "ConfirmBox" and w.text:find("1.3.5", 1, true) then sorular = sorular + 1 end end
 kontrol(sorular == 1, "bir hafta geçince bir kez sordu (iki örnek açıkken bile)")
 kontrol(son("ConfirmBox").cancel_text == "Sonra", "sormadan kurmuyor")
 fm.settings:saveSetting("guncelleme_son_denetim", os.time() - 8 * 24 * 3600)
@@ -2320,7 +2338,7 @@ local KOBO = {
   isaretler = {
     { "b1", "file://" .. K1, "file://" .. K1 .. "#(1)ch1.xhtml", "ch1.xhtml#point(/1/4)", "Deniz sakin, rüzgâr hafifti.", "", "2026-11-01T09:00:00Z", 0.2, "highlight" },
     { "b2", "file://" .. K1, "file://" .. K1 .. "#(1)ch1.xhtml", "ch1.xhtml#point(/1/6)", "fırtına geldi", "Önemli an", "2026-11-01T09:05:00Z", 0.8, "note" },
-    { "b3", "file://" .. K1, "file://" .. K1 .. "#(1)ch1.xhtml", "ch1.xhtml#point(/1/8)", "Kitapta olmayan bir cümle", "", "2026-11-01T09:06:00Z", 0.9, "highlight" },
+    { "b3", "file://" .. K1, "file://" .. K1 .. "#(1)ch9.xhtml", "ch9.xhtml#point(/1/8)", "Kitapta olmayan bir cümle", "", "2026-11-01T09:06:00Z", 0.9, "highlight" },
     { "b4", "file://" .. K2, "file://" .. K2 .. "#(1)ch1.xhtml", "ch1.xhtml#point(/1/2)", "ilk adımı burada başlar", "", "2026-11-02T09:00:00Z", 0.1, "highlight" },
   },
   raflar = { { "Yaz okumaları", "Yaz okumaları" } },
@@ -2354,15 +2372,34 @@ package.loaded["lua-ljsqlite3/init"] = { open = function()
 end }
 -- Tek bölümlük sahte kitap: findAllText metinde arar, konumlar karakter sırası
 local function sahteBelge(metin)
-  local d = {}
+  local d = { konum = 0 }
   local function xp(i) return "/body/DocFragment[1]/body/p/text()." .. i end
   local function ofs(x) return tonumber(tostring(x):match("%.(%d+)$")) or 0 end
   function d:getPageCount() return 10 end
   function d:isXPointerInDocument(x) return x == "/body/DocFragment[1]" end
-  function d:getDocumentFileContent() return nil end
+  function d:getDocumentFileContent(yol)
+    if yol == "META-INF/container.xml" then return '<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>' end
+    if yol == "OEBPS/content.opf" then return '<package><manifest><item id="c1" href="ch1.xhtml"/></manifest><spine><itemref idref="c1"/></spine></package>' end
+  end
+  -- crengine findText: bulunduğu yerden ileri arar, ilk eşleşmeden ~2 sayfa sonra durur
+  function d:gotoXPointer(x) self.konum = ofs(x) end
+  function d:findText(desen)
+    SAHTE_ARAMA.hizli = SAHTE_ARAMA.hizli + 1
+    local hits, i, sinir = {}, self.konum + 1, nil
+    while true do
+      local a, b = metin:find(desen, i, true)
+      if not a or (sinir and a > sinir) then break end
+      hits[#hits + 1] = { start = xp(a - 1), ["end"] = xp(b) }
+      sinir = sinir or (b + 40)
+      i = b + 1
+    end
+    if #hits == 0 then return nil end
+    return hits, #hits
+  end
   function d:getPageFromXPointer(x) return 1 + math.floor(ofs(x) / 20) end
   function d:getPageXPointer(pg) return xp((pg - 1) * 20) end
   function d:findAllText(desen)
+    SAHTE_ARAMA.tam = SAHTE_ARAMA.tam + 1
     local hits, i = {}, 1
     while true do
       local a, b = metin:find(desen, i, true)
@@ -2384,6 +2421,12 @@ local function sahteBelge(metin)
   return d
 end
 rawset(_G, "KOBO_BELGE", function() return sahteBelge(METIN) end)
+rawset(_G, "SAHTE_ARAMA", { hizli = 0, tam = 0 })
+FS["/tmp"] = FS["/tmp"] or {}
+local function birTur() -- şu an bekleyen zamanlanmış işleri bir kez çalıştır
+  local n = #zamanlanan
+  for _ = 1, n do local f = table.remove(zamanlanan, 1); if f then f() end end
+end
 package.preload["apps/reader/modules/readerannotation"] = function() return {} end
 
 kontrol(fmMetinleri(fm):find("Kobo Senkron", 1, true) ~= nil, "Kobo veritabanı varsa 1000Kitap menüsünde Kobo Senkron")
@@ -2393,20 +2436,57 @@ for _, o in ipairs(km) do km_metin[#km_metin + 1] = o.text end
 kontrol(table.concat(km_metin, "|") == "Şimdi senkronize et|Kobo vurgularını 1000Kitap'a gönder|Kobo'da notlu kitaplar|Koleksiyonlar|Ayarlar|Hakkında",
   "Kobo alt menüsü (dosya tarayıcısı): " .. table.concat(km_metin, "|"))
 
--- Dosya tarayıcısından tam senkron
+-- Dosya tarayıcısından tam senkron: listeler ve ilerleme hemen, notlar arka planda
+ALT.bekle = true
+local alt_bas = ALT.sayi
 fm:onKoboSyncNow()
+local ilk = son("InfoMessage")
+kontrol(ilk and ilk.text:find("2 kitabın okuma ilerlemesi Kobo'dan güncellendi.", 1, true)
+  and ilk.text:find("Kobo listeleri: 3 kitap eklendi", 1, true)
+  and ilk.text:find("Kobo notları arka planda aktarılıyor: 2 kitap, 4 not.", 1, true) and ilk.timeout,
+  "listeler/ilerleme hemen; notlar arka planda (ekran kilitlenmiyor): " .. (ilk and ilk.text:gsub("\n", " / ") or "yok"))
+kontrol(Plugin.Kobo.arkaCalisiyor() and ALT.sayi == alt_bas, "sıraya alındı, kitap henüz açılmadı")
+birTur()
+kontrol(ALT.sayi == alt_bas + 1, "ilk kitap ayrı bir süreçte açıldı")
+local dm = Plugin.Kobo.arkaDurumMetni() or ""
+kontrol(dm:find("Kobo notları aktarılıyor · %75", 1, true) and dm:find("1 / 2 kitap: Kobo Kitap", 1, true)
+  and dm:find("3 / 3 not arandı", 1, true) and dm:find("Toplam: 0 sn", 1, true),
+  "durum: yüzde notlara göre, kitap ve not sırası: " .. dm:gsub("\n", " / "))
+fm:onKoboSyncNow()
+local durum_d = son("ButtonDialog")
+kontrol(durum_d.title:find("Kobo notları aktarılıyor", 1, true) and durum_d.buttons[1][1].text == "Durdur",
+  "sürerken yeniden başlatmak yerine durumu ve Durdur'u gösterdi")
+local kmd = fm:koboMenusu()
+kontrol(kmd[1].text_func() == "Kobo aktarımı sürüyor · %75" and kmd[3].text == "Kobo vurgularını 1000Kitap'a gönder",
+  "Kobo menüsünde ilerleme")
+fm:ekranAc()
+local ekr0
+for i = #gosterilen, 1, -1 do if gosterilen[i].covers_fullscreen and gosterilen[i].veri then ekr0 = gosterilen[i]; break end end
+local function bul0(w, metin, gor)
+  gor = gor or {}
+  if type(w) ~= "table" or gor[w] then return nil end
+  gor[w] = true
+  if w._tur == "ButtonTable" then for _, st in ipairs(w.buttons) do for _, b in ipairs(st) do if b.text == metin then return b end end end end
+  for _, c in ipairs(w) do local b = bul0(c, metin, gor); if b then return b end end
+end
+kontrol(ekr0 and bul0(ekr0, "Kobo aktarımı %75 ›"), "1000Kitap ekranında ilerleme")
+ekr0:onClose()
+ALT.bekle = false
+calistir()
 local ozet = son("InfoMessage")
-kontrol(ozet and ozet.text:find("Kobo senkron", 1, true) and ozet.text:find("2 kitaba 2 vurgu ve 1 not eklendi.", 1, true)
-  and ozet.text:find("1 not/vurgu eşleşmedi", 1, true), "özet: " .. (ozet and ozet.text:gsub("\n", " / ") or "yok"))
+kontrol(ozet and ozet.text:find("Kobo notları aktarıldı", 1, true) and ozet.text:find("2 kitaba 2 vurgu ve 1 not eklendi.", 1, true)
+  and ozet.text:find("1 not/vurgu eşleşmedi", 1, true) and ozet.text:find("Süre: 0 sn", 1, true) and not Plugin.Kobo.arkaCalisiyor(),
+  "bitince özet: " .. (ozet and ozet.text:gsub("\n", " / ") or "yok"))
+local hiz_log
+for _, l in ipairs(loglar) do if l:find("Kobo: Kobo Kitap: açılış", 1, true) then hiz_log = l end end
+local hizli_n, tam_n = (hiz_log or ""):match("(%d+) hızlı / (%d+) tam arama")
+kontrol(tonumber(hizli_n) and tonumber(hizli_n) >= 2 and tonumber(tam_n) >= 1,
+  "Kobo'nun bölümünden arandı; yalnızca bölümü bilinmeyen not bütün kitapta arandı: " .. tostring(hiz_log))
 local y1 = YAN_DOSYALAR[K1]
 local ann1 = y1 and y1.annotations or {}
 kontrol(#ann1 == 2 and ann1[1].text == "Deniz sakin, rüzgâr hafifti." and ann1[2].note == "Önemli an"
   and ann1[1].kobo_id == "b1" and ann1[2].kobo_id == "b2" and y1.annotations_externally_modified == true,
   "vurgu ve not kitabın yan dosyasına eklendi, Kobo'dan geldiği işaretli")
-local et = TRAPPER.etiketler or {}
-kontrol(et[1] and et[1]:find("Kobo notları aktarılıyor · %0", 1, true) and et[1]:find("1 / 2 kitap: Kobo Kitap", 1, true)
-  and et[1]:find("3 vurgu/not aranıyor", 1, true) and et[2] and et[2]:find("· %50", 1, true) and et[2]:find("2 / 2 kitap", 1, true),
-  "aktarırken yüzde, kitap sırası ve not sayısı görünüyor: " .. tostring(et[2]):gsub("\n", " / "))
 kontrol(Plugin.yuzde(1, 3) == "%33" and Plugin.yuzde(0, 0) == "%0" and Plugin.yuzde(5, 5) == "%100", "yüzde yazımı")
 kontrol(ann1[1].kobo_oran and ann1[1].kobo_oran > 0 and ann1[1].kobo_oran < 1, "Kobo vurgusunun kitaptaki yeri kaydedildi")
 kontrol(y1.kobosync_imported and y1.kobosync_imported.b1 and y1.kobosync_imported.b2 and y1.kobosync_failed and y1.kobosync_failed.b3,
@@ -2418,9 +2498,9 @@ kontrol(YAN_DOSYALAR[K2].summary.status == "complete" and YAN_DOSYALAR[K2].perce
 kontrol(RC.coll["Yaz okumaları"] and RC.coll["Yaz okumaları"][K1] and RC.coll["Kobo vurgu ve notları"]
   and RC.coll["Kobo vurgu ve notları"][K1] and RC.coll["Kobo vurgu ve notları"][K2], "Kobo listesi ve notlu kitaplar koleksiyonu")
 -- İkinci senkron: aynı notlar tekrar eklenmez
-local alt_once = TRAPPER.alt_islem
-fm:onKoboSyncNow()
-kontrol(#YAN_DOSYALAR[K1].annotations == 2 and #YAN_DOSYALAR[K2].annotations == 1 and TRAPPER.alt_islem == alt_once,
+local alt_once = ALT.sayi
+fm:onKoboSyncNow(); calistir()
+kontrol(#YAN_DOSYALAR[K1].annotations == 2 and #YAN_DOSYALAR[K2].annotations == 1 and ALT.sayi == alt_once,
   "ikinci senkronda tekrar eklenmedi, kitap bile açılmadı")
 kontrol(son("InfoMessage").text == "Kobo senkron: her şey güncel.", "her şey güncel dedi")
 -- Kobo'da listeden çıkarılınca KOReader'da da çıkar
@@ -2448,6 +2528,7 @@ kui.handleEvent = function(_, ev) olaylar[#olaylar + 1] = ev end
 kui.annotation.addItem = function(this, item) table.insert(this.annotations, item); return #this.annotations end
 kui.doc_settings = docSettings({ kobosync_imported = { b4 = true } })
 local kp = Plugin:new{ ui = kui }
+kui.binkitap = kp
 local RUI = require("apps/reader/readerui")
 RUI.instance = kui
 kp:onReaderReady(); calistir()
@@ -2553,6 +2634,26 @@ package.preload["features/sui_quickactions"] = nil
 package.loaded["features/sui_quickactions"] = nil
 kontrol(io.open("binkitap.koplugin/kobo.svg", "rb") ~= nil, "Kobo simgesi eklentinin kök klasöründe")
 
+-- Arka plan aktarımını durdur: bitenler kalır, kalanlar sonra sürer
+KOBO.isaretler[#KOBO.isaretler + 1] = { "b7", "file://" .. K1, "file://" .. K1 .. "#(1)ch1.xhtml", "ch1.xhtml#point(/1/5)", "Sonra fırtına geldi", "", "2026-11-06T09:00:00Z", 0.7, "highlight" }
+local k1_once = #YAN_DOSYALAR[K1].annotations
+ALT.bekle = true
+local durd_once = ALT.durdurulan
+fm:onKoboSyncNow()
+birTur()
+kontrol(Plugin.Kobo.arkaCalisiyor(), "yeni Kobo notu için arka plan başladı")
+fm.kobo:arkaDurumGoster()
+dugme(son("ButtonDialog"), "Durdur").callback()
+local dz = son("InfoMessage")
+kontrol(not Plugin.Kobo.arkaCalisiyor() and ALT.durdurulan == durd_once + 1 and dz.text:find("Aktarımı durdurdun", 1, true)
+  and #YAN_DOSYALAR[K1].annotations == k1_once, "durduruldu: süreç kapatıldı, yarım kalan kitaba bir şey yazılmadı")
+ALT.bekle = false
+calistir()
+fm:onKoboSyncNow(); calistir()
+local son_ann = YAN_DOSYALAR[K1].annotations[#YAN_DOSYALAR[K1].annotations]
+kontrol(#YAN_DOSYALAR[K1].annotations == k1_once + 1 and son_ann.kobo_id == "b7" and son("InfoMessage").text:find("Kobo notları aktarıldı", 1, true),
+  "bir sonraki taramada kaldığı yerden sürdü: " .. son("InfoMessage").text:gsub("\n", " / "))
+
 -- Eski Kobo Senkron eklentisi hâlâ açıksa iş onun; 1000Kitap kapatmayı önerir
 local eski = { cagri = {} }
 for _, ad in ipairs({ "runScan", "showReport", "showQuickDialog" }) do eski[ad] = function() eski.cagri[#eski.cagri + 1] = ad end end
@@ -2561,10 +2662,10 @@ fm_ui.kobosync = eski
 kontrol(fm:onKoboSyncNow() == nil and fm:onKoboSyncMenu() == nil, "hareket olayı eski eklentiye bırakıldı")
 fm:koboSimdi(); fm:koboRapor(); fm:koboHizliMenu()
 kontrol(table.concat(eski.cagri, ",") == "runScan,showReport,showQuickDialog", "1000Kitap düğmeleri eski eklentiyi çalıştırdı")
-local alt_e = TRAPPER.alt_islem
+local alt_e = ALT.sayi
 local bilgi_e = #TRAPPER.bilgi
-fm.kobo:autoScan()
-kontrol(TRAPPER.alt_islem == alt_e and #TRAPPER.bilgi == bilgi_e, "eski eklenti açıkken kendiliğinden tarama yok")
+fm.kobo:autoScan(); calistir()
+kontrol(ALT.sayi == alt_e and #TRAPPER.bilgi == bilgi_e, "eski eklenti açıkken kendiliğinden tarama yok")
 local em = fm:koboMenusu()
 kontrol(em[1].text == "Eski Kobo Senkron eklentisini kapat" and em[2].text == "ESKİ: Şimdi senkronize et", "menüde eskisini kapatma ve onun menüsü")
 fm:eskiKoboUyarisi()
