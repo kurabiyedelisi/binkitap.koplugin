@@ -329,27 +329,51 @@ return function(BinKitap)
     -- "Gönderildi" işaretli Kobo vurgularını 1000Kitap'taki alıntılarla karşılaştır
     --
     -- 1.3.3'ten önce 1000Kitap'ın reddettiği alıntılar (ör. "1 günde en fazla 500
-    -- alıntı") sıradan silinirdi ama vurgu "gönderildi" işaretli kalırdı. Burada her
-    -- kitap için profilindeki alıntılar okunur (yalnızca okuma), orada olmayan
-    -- vurgunun işareti kaldırılır: tekrar gönderilebilir olur.
+    -- alıntı") sıradan silinirdi ama vurgu "gönderildi" işaretli kalırdı. Burada
+    -- profilindeki bütün alıntılar bir kez okunur (yalnızca okuma; 1000Kitap kitaba
+    -- göre süzmeyi her zaman yapamıyor, bu yüzden süzgece güvenilmez), metni
+    -- hiçbirinde olmayan vurgunun işareti onayla kaldırılır: tekrar gönderilebilir olur.
+    -- Okuma yarıda kalırsa hiçbir şey değişmez (eksik listeyle çift gönderim olmasın).
     ---------------------------------------------------------------------------
 
+    --- Karşılaştırma için sade metin: boşluk, noktalama (tırnaklar dahil) ve
+    --- büyük/küçük harf farkları yok sayılır. İki taraf da aynı biçimde sadeleşir.
+    local NOKTALAMA = { "“", "”", "„", "‘", "’", "«", "»", "‹", "›", "—", "–", "…", "‐", "‑", "·" }
+    local BUYUK = { { "İ", "i" }, { "Ş", "ş" }, { "Ğ", "ğ" }, { "Ü", "ü" }, { "Ö", "ö" }, { "Ç", "ç" }, { "Â", "â" }, { "Î", "î" }, { "Û", "û" } }
     local function normal(s)
         local ok, n = pcall(KUtil.normalize, s or "")
-        return ok and n or ""
+        if not ok then return "" end
+        for _i, c in ipairs(NOKTALAMA) do n = n:gsub(c, " ") end
+        for _i, c in ipairs(BUYUK) do n = n:gsub(c[1], c[2]) end
+        n = n:gsub("%p", " "):lower():gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
+        return n
     end
 
-    --- Yerel vurgu metni sitedeki alıntılardan birinde var mı? (site uzunları kısaltabilir)
-    local function sitedeVar(yerel, site)
+    BinKitap.KARSILASTIR_EN_FAZLA_SAYFA = 1500
+
+    --- Sitedeki alıntılar: önce baştan 30 harf (hızlı), olmazsa içinde arama
+    --- (site uzun alıntıları kısaltabilir, baştaki tırnak vb. farklı olabilir).
+    local function siteDizini(metinler)
+        local bas = {}
+        for _i, b in ipairs(metinler) do bas[b:sub(1, 30)] = true end
+        return { liste = metinler, bas = bas }
+    end
+
+    local function sitedeVar(yerel, dizin)
         local a = normal(yerel)
         if a == "" then return true end
-        local bas = a:sub(1, 40)
-        for _i, b in ipairs(site) do
-            if b:find(bas, 1, true) or (#b >= 20 and a:find(b:sub(1, 40), 1, true)) then return true end
+        if dizin.bas[a:sub(1, 30)] then return true end
+        local parca = a:sub(1, 40)
+        for _i, b in ipairs(dizin.liste) do
+            if b:find(parca, 1, true) or (#b >= 20 and a:find(b:sub(1, 40), 1, true)) then return true end
         end
         return false
     end
-    BinKitap._sitedeVar = sitedeVar
+    BinKitap._sitedeVar = function(yerel, metinler)
+        local n = {}
+        for _i, m in ipairs(metinler) do n[#n + 1] = normal(m) end
+        return sitedeVar(yerel, siteDizini(n))
+    end
 
     function BinKitap:koboKarsilastir()
         local kadi = self.kullanici_adi
@@ -392,7 +416,7 @@ return function(BinKitap)
         end
         table.sort(kitaplar, function(x, y) return tostring(x.kitap.adi) < tostring(y.kitap.adi) end)
         UIManager:show(ConfirmBox:new{
-            text = T(_("%1 kitapta \"gönderildi\" işaretli %2 Kobo vurgusu, 1000Kitap'taki alıntılarınla karşılaştırılacak. Orada olmayanlar yeniden gönderilebilir olur.\n\nYalnızca okur, hesabına bir şey yazmaz.\n\n1.3.3'ten önce gizli gönderdiğin vurgular alıntılarında görünmediği için onlar da yeniden gönderilebilir olarak işaretlenebilir."), #kitaplar, toplam),
+            text = T(_("%1 kitapta \"gönderildi\" işaretli %2 Kobo vurgusu, 1000Kitap'taki bütün alıntılarınla karşılaştırılacak (alıntıların çoksa birkaç dakika sürebilir). Sonunda orada olmayanların sayısını görürsün; onaylarsan yeniden gönderilebilir olurlar.\n\nYalnızca okur, hesabına bir şey yazmaz.\n\n1.3.3'ten önce gizli gönderdiğin vurgular alıntılarında görünmediği için onlar da sayıya girebilir."), #kitaplar, toplam),
             ok_text = _("Karşılaştır"),
             ok_callback = function()
                 NetworkMgr:runWhenOnline(function() self:koboKarsilastirCalistir(kadi, kitaplar) end)
@@ -402,22 +426,15 @@ return function(BinKitap)
 
     function BinKitap:koboKarsilastirCalistir(kadi, kitaplar)
         local DocSettings = require("docsettings")
-        local i, sayfa, site, iptal, kutu = 1, nil, {}, false, nil
-        local filtresiz -- 1000Kitap kitap süzgecini yok sayarsa bütün alıntılar bir kez okunur
+        local sayfa, metinler, iptal, kutu, okunan = nil, {}, false, nil, 0
         local function goster()
             if kutu then UIManager:close(kutu) end
             kutu = InfoMessage:new{
-                text = T(_("1000Kitap'taki alıntılarınla karşılaştırılıyor… %1\n\n%2 / %3 kitap: %4\n\nDurdurmak için dokun."),
-                    BinKitap.yuzde(i - 1, #kitaplar), math.min(i, #kitaplar), #kitaplar, kitaplar[math.min(i, #kitaplar)].kitap.adi or ""),
+                text = T(_("1000Kitap'taki alıntıların okunuyor…\n\n%1 sayfa · %2 alıntı\n\nBitince karşılaştırılacak; o zamana kadar hiçbir şey değişmez. Durdurmak için dokun."),
+                    okunan, #metinler),
                 dismiss_callback = function() iptal = true; kutu = nil end,
             }
             UIManager:show(kutu)
-        end
-        local function eksikleriBul(e, metinler)
-            e.eksik = {}
-            for _j, a in ipairs(e.adaylar) do
-                if not sitedeVar(a.text, metinler) then e.eksik[#e.eksik + 1] = self:vurguAnahtari(a) end
-            end
         end
         local function isaretle()
             local n = 0
@@ -434,21 +451,24 @@ return function(BinKitap)
             end
             return n
         end
-        local function bitir(hata)
+        local function sonuc()
             if kutu then UIManager:close(kutu); kutu = nil end
-            if hata then return self:hataGoster(hata) end -- hiçbir şey değişmedi
+            local dizin = siteDizini(metinler)
             local eksik, kitap_sayisi = 0, 0
             for _j, e in ipairs(kitaplar) do
-                if e.eksik and #e.eksik > 0 then eksik = eksik + #e.eksik; kitap_sayisi = kitap_sayisi + 1 end
+                e.eksik = {}
+                for _k, v in ipairs(e.adaylar) do
+                    if not sitedeVar(v.text, dizin) then e.eksik[#e.eksik + 1] = self:vurguAnahtari(v) end
+                end
+                if #e.eksik > 0 then eksik = eksik + #e.eksik; kitap_sayisi = kitap_sayisi + 1 end
             end
-            local ek = iptal and ("\n" .. _("Durduruldu; yalnızca bakılan kitaplar sayıldı.")) or ""
             if eksik == 0 then
-                return self:bildir(_("Karşılaştırılan bütün Kobo vurguları 1000Kitap'ta var.") .. ek, 5)
+                return self:bildir(T(_("1000Kitap'taki %1 alıntınla karşılaştırıldı: gönderildi görünen bütün Kobo vurguları orada var."), #metinler), 5)
             end
             local sinir = self:sinirMetni()
             local dialog
             dialog = ButtonDialog:new{
-                title = T(_("%1 Kobo vurgusu 1000Kitap'taki alıntılarında yok (%2 kitap)."), eksik, kitap_sayisi) .. ek
+                title = T(_("1000Kitap'taki %1 alıntınla karşılaştırıldı: %2 Kobo vurgusu orada yok (%3 kitap)."), #metinler, eksik, kitap_sayisi)
                     .. "\n\n" .. _("Yeniden gönderilebilir olarak işaretlensin mi? Sayı beklediğinden çok fazlaysa Vazgeç: hiçbir şey değişmez.")
                     .. (sinir and ("\n\n" .. sinir) or ""),
                 title_align = "left",
@@ -468,39 +488,25 @@ return function(BinKitap)
             }
             UIManager:show(dialog)
         end
+        local function vazgec(neden)
+            if kutu then UIManager:close(kutu); kutu = nil end
+            self:hataGoster(neden .. "\n\n" .. _("Karşılaştırma yapılmadı, hiçbir şey değişmedi."))
+        end
         local adim
         adim = function()
-            if iptal then return bitir() end
-            local e = kitaplar[i]
-            if not e then return bitir() end
-            local liste, sonraki = Api:okurAlintilari(kadi, sayfa, (not filtresiz) and e.kitap.id or nil)
-            if not liste then return bitir(T(_("1000Kitap'a ulaşılamadı, hiçbir şey değişmedi: %1"), tostring(sonraki or "?"))) end
-            for _j, o in ipairs(liste) do
-                if filtresiz == nil and o.kitap_id ~= "" and tostring(o.kitap_id) ~= tostring(e.kitap.id) then
-                    filtresiz = true -- süzgeç çalışmıyor: alıntıları kitaplarına göre ayır
-                end
-                local kid = (o.kitap_id ~= "" and tostring(o.kitap_id)) or tostring(e.kitap.id)
-                site[kid] = site[kid] or {}
-                table.insert(site[kid], normal(o.soz))
+            if iptal then return vazgec(_("Durduruldu.")) end
+            local liste, sonraki = Api:okurAlintilari(kadi, sayfa)
+            if not liste then
+                return vazgec(T(_("1000Kitap'a ulaşılamadı: %1"), tostring(sonraki or "?")))
             end
-            if filtresiz == nil and #liste > 0 then filtresiz = false end
+            okunan = okunan + 1
+            for _j, o in ipairs(liste) do metinler[#metinler + 1] = normal(o.soz) end
             sayfa = sonraki
-            if sayfa then
-                if filtresiz and (sayfa.sayfa or 0) > 100 then
-                    -- hepsini okuyamadık: eksik sanıp çift gönderme riski var, hiçbir şeye dokunma
-                    return bitir(_("1000Kitap alıntıları kitaba göre vermedi ve alıntıların bir seferde okunamayacak kadar çok. Karşılaştırma yapılmadı, hiçbir şey değişmedi."))
-                end
-                return UIManager:scheduleIn(0.3, adim)
+            if not sayfa then return sonuc() end
+            if okunan >= BinKitap.KARSILASTIR_EN_FAZLA_SAYFA then
+                return vazgec(T(_("Alıntıların %1 sayfadan fazla; hepsi okunamadı."), okunan))
             end
-            if filtresiz then
-                for _j, k in ipairs(kitaplar) do eksikleriBul(k, site[tostring(k.kitap.id)] or {}) end
-                i = #kitaplar + 1
-                return bitir()
-            end
-            eksikleriBul(e, site[tostring(e.kitap.id)] or {})
-            i, sayfa = i + 1, nil
-            if i > #kitaplar then return bitir() end
-            goster()
+            if okunan % 5 == 0 then goster() end
             UIManager:scheduleIn(0.3, adim)
         end
         goster()

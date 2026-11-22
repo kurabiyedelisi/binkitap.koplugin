@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.3.3 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.3.4 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -177,7 +177,7 @@ Kobo'nun kendi okuyucusunda (Nickel) yaptıklarını KOReader'a aktarır. Önced
 - **Nereden:** **1000Kitap → Kobo Senkron** (Şimdi senkronize et, Kobo'da notlu kitaplar, Koleksiyonlar, Ayarlar). 1000Kitap ekranının Kütüphane bölümünde **Kobo'dan aktar** ve **Kobo notları**. SimpleUI'de **Kobo** düğmesi.
 - Aktarım tek yönlüdür (Kobo → KOReader); Kobo'nun veritabanına hiçbir şey yazılmaz. Bir kez aktarılan not, KOReader'da silsen de tekrar eklenmez. Kobo'da ve KOReader'da aynı dosya okunmalıdır; Kobo mağazasından alınmış şifreli kitaplar ve kalemle yapılan çizimler aktarılamaz.
 - **Kobo vurgularını tek tuşla 1000Kitap'a gönder.** 1000Kitap ekranında **Kobo vurgularını 1000Kitap'a gönder**, ayrıca Kobo Senkron menüsünde ve Kobo hızlı menüsünde. Okurken o kitabın, dosya tarayıcısında bütün kitapların Kobo'dan gelen ve henüz gönderilmemiş vurgularını gönderir; herkese açık mı gizli mi diye bir kez sorar. Eşleşmesi doğrulanmamış kitaplar yanlış kitaba gitmesin diye dahil edilmez, **Kitap kitap seç**'ten eklenebilir. Bir kez gönderilen vurgu tekrar gönderilmez.
-- **Gönderilenleri 1000Kitap'la karşılaştır** (Kobo Senkron menüsünde): gönderildi görünen ama 1000Kitap'taki alıntılarında olmayan Kobo vurgularını bulur (ör. 1.3.3'ten önce günlük sınıra takılıp reddedilenler), sayısını gösterir; onaylarsan yeniden gönderilebilir yapar. Yalnızca okur. 1000Kitap alıntılarını eksiksiz okuyamazsa hiçbir şeye dokunmaz. Bunun için Ayarlar'da 1000Kitap kullanıcı adının girili olması gerekir.
+- **Gönderilenleri 1000Kitap'la karşılaştır** (Kobo Senkron menüsünde): gönderildi görünen ama 1000Kitap'taki alıntılarında olmayan Kobo vurgularını bulur (ör. 1.3.3'ten önce günlük sınıra takılıp reddedilenler), sayısını gösterir; onaylarsan yeniden gönderilebilir yapar. Yalnızca okur. 1000Kitap kitaba göre süzmeyi her zaman yapamadığı için profilindeki bütün alıntıları bir kez okur (çoksa birkaç dakika sürer); tırnak, noktalama ve büyük/küçük harf farklarını yok sayar. Okuma yarıda kalırsa (bağlantı, Durdur) hiçbir şeye dokunmaz. Bunun için Ayarlar'da 1000Kitap kullanıcı adının girili olması gerekir.
 - Kobo'dan gelen vurgular renk kuralıyla **kendiliğinden** gönderilmez, renk kuralına uysalar bile; yukarıdaki düğmeyle ya da okurken **Bu kitabın vurgularını gönder → Yalnızca Kobo'dan gelenler** ile gönderilir.
 - **Arka planda çalışır.** Listeler ve okuma ilerlemesi hemen aktarılır; notlar için kitaplar arka planda birer birer açılıp taranır, sen bu sırada okumaya devam edersin. Ne kadarının bittiği (yüzde, hangi kitap, kaç not) Kobo menüsünün ve 1000Kitap ekranındaki Kobo düğmesinin üstünde görünür; dokununca ayrıntı ve **Durdur** çıkar. Bitince kısa bir özet gelir. Durdurursan bitenler kaydedilir, kalanlar bir sonraki taramada sürer. Açtığın kitabın yeni Kobo notları da arka planda eklenir.
 - **Hızlı arama.** Her not, Kobo'nun kaydettiği bölümde, bulunduğu yerin biraz öncesinden aranır; ancak orada bulunamazsa bütün kitapta aranır. İlk aktarım (yüzlerce notlu eski kitaplar) yine biraz sürebilir; sonrakilerde yalnızca yeni notlar aranır.

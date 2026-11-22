@@ -3,6 +3,12 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.4",
+        maddeler = {
+            "Gönderilenleri 1000Kitap'la karşılaştır artık 1000Kitap'ın kitaba göre süzmesine güvenmiyor (bazen süzemiyor): profilindeki bütün alıntıları bir kez okuyup karşılaştırıyor. Tırnak, noktalama ve büyük/küçük harf farkları yok sayılıyor. Okuma yarıda kalırsa hiçbir şey değişmiyor.",
+        },
+    },
+    {
         surum = "1.3.3",
         maddeler = {
             "1000Kitap'ın günlük alıntı sınırına (\"1 günde en fazla 500 alıntı\") takılan alıntılar artık silinmez: sırada bekler ve ertesi gün kendiliğinden gönderilir. O gün başka alıntı denenmez, diğer işler sürer. Bekleyen gönderiler menüsünde \"günlük sınır, yarın\" yazar.",
