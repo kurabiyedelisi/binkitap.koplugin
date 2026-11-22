@@ -3,6 +3,14 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.8",
+        maddeler = {
+            "3., 4. … okuma: her yeniden okuma 1000Kitap'ta bir okuma daha ekler; önceki okumaların durur. Her yeni okumanın sonunda bitiş ekranı yine çıkar.",
+            "Zaten \"Okudum\" olan bir kitabı yeniden okuyup bitirdiysen (bitiş ekranından ya da menüden Okudum), bu okumayı yeni okuma olarak eklemeyi sorar. Toplu aktarımda ve kitabı az önce Okudum yaptıysan sormaz.",
+            "Bir okumayı bitirdikten sonraki gün yeniden okumaya başlarsan da \"Yeniden mi okuyorsun?\" sorusu gelir (önceden 7 gün bekliyordu).",
+        },
+    },
+    {
         surum = "1.3.7",
         maddeler = {
             "Yeniden okuma artık 1000Kitap'ın kendi \"+ → 2. okumayı ekle → Okuyorum\" isteğiyle birebir aynı şekilde başlıyor (sitede izlenip doğrulandı). Eski okuman olduğu gibi kalır, kitabın sayfasında yeni okuma ayrı görünür.",

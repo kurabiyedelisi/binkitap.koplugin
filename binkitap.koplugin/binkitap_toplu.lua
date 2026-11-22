@@ -1112,7 +1112,7 @@ return function(BinKitap)
                 UIManager:close(dialog)
                 local function sirala(kitap)
                     if self:acikDosya() == yol then return self:durumIstegi(d) end
-                    self:siraya({ tur = "durum", kitap_id = kitap.id, kitap_adi = kitap.adi, durum = d })
+                    self:siraya({ tur = "durum", kitap_id = kitap.id, kitap_adi = kitap.adi, durum = d, elle = true })
                     if not Api:kimlikVar() then return self:kimlikUyarisi() end
                     NetworkMgr:runWhenOnline(function() self:kuyruguGonder(false) end)
                 end

@@ -1107,7 +1107,7 @@ function BinKitap:durumIstegi(durum)
     if durum == Api.DURUM.okudum then kitap.okudum_islendi = true end
     if durum == Api.DURUM.okuyorum then kitap.okuyorum_islendi = true end
     self:kitapKaydetAyar(kitap)
-    self:siraya({ tur = "durum", kitap_id = kitap.id, kitap_adi = kitap.adi, durum = durum })
+    self:siraya({ tur = "durum", kitap_id = kitap.id, kitap_adi = kitap.adi, durum = durum, elle = true })
     if not Api:kimlikVar() then return self:kimlikUyarisi() end
     NetworkMgr:runWhenOnline(function() self:kuyruguGonder(false) end)
 end
@@ -1193,7 +1193,7 @@ function BinKitap:bitisPenceresi(kitap, d)
                 { text = _("Kaydet"), callback = kapatVe(function()
                     kitap.okudum_islendi = true
                     self:kitapKaydetAyar(kitap)
-                    self:siraya({ tur = "durum", kitap_id = kitap.id, kitap_adi = kitap.adi, durum = Api.DURUM.okudum })
+                    self:siraya({ tur = "durum", kitap_id = kitap.id, kitap_adi = kitap.adi, durum = Api.DURUM.okudum, elle = true })
                     if d.puan then
                         self:siraya({ tur = "puan", kitap_id = kitap.id, kitap_adi = kitap.adi, puan = d.puan })
                     end
@@ -1451,7 +1451,7 @@ end
 ---------------------------------------------------------------------------
 
 local YENIDEN_RED_SURESI = 30 * 24 * 3600 -- "Hayır, sadece bakıyorum" 30 gün geçerli
-local OKUDUM_SONRASI = 7 * 24 * 3600 -- bitirdikten sonra gelen ilerleme yeniden okuma sayılmaz
+local OKUDUM_SONRASI = 24 * 3600 -- bitirdikten sonraki gün içinde gelen ilerleme yeniden okuma sayılmaz
 
 --- Eklentinin bir kitabı "Okudum" yaptığı zamanı kaydeder (bitince kapanışta giden
 -- ilerleme "yeniden okuyorsun" sanılmasın diye).
@@ -1465,14 +1465,18 @@ function BinKitap:okudumKaydet(kitap_id)
     self.settings:saveSetting("okudum_gonderilen", g)
 end
 
+--- Eklenti bu kitabı son bir gün içinde "Okudum" yaptı mı?
+function BinKitap:yeniOkudum(kitap_id)
+    local g = self.settings:readSetting("okudum_gonderilen")
+    local z = type(g) == "table" and g[tostring(kitap_id)]
+    return type(z) == "number" and os.time() - z < OKUDUM_SONRASI
+end
+
 --- Okudum olan kitaba gelen ilerleme yeniden okuma işareti mi?
 function BinKitap:ilerlemeYenidenOkumaMi(oge)
     if oge.otomatik_eslesme then return false end -- eşleşme doğrulanmadı
     if not oge.yuzde or oge.yuzde >= 0.9 then return false end -- kitabın sonu: yeni bitirmiş
-    local g = self.settings:readSetting("okudum_gonderilen")
-    local z = type(g) == "table" and g[tostring(oge.kitap_id)]
-    if type(z) == "number" and os.time() - z < OKUDUM_SONRASI then return false end
-    return true
+    return not self:yeniOkudum(oge.kitap_id)
 end
 
 --- "sor" (varsayılan) | "otomatik" | "hayir"
@@ -1487,7 +1491,7 @@ end
 function BinKitap:yenidenOkumaIsaretle(kitap_id)
     local id = tostring(kitap_id)
     local y = self.settings:readSetting("yeniden_okunan") or {}
-    y[id] = os.time()
+    y[id] = math.max(os.time(), (tonumber(y[id]) or 0) + 1) -- 3., 4. okuma da ayrı sayılsın
     self.settings:saveSetting("yeniden_okunan", y)
     local red = self.settings:readSetting("yeniden_okuma_red")
     if type(red) == "table" and red[id] then
@@ -1509,37 +1513,58 @@ function BinKitap:yenidenOkumaAcilis(kitap)
     self:kitapKaydetAyar(kitap)
 end
 
---- Okudum olan kitapta yeni okumayı başlatır (kuyruk işi olarak döner).
-function BinKitap:yenidenOkumaGonder(kitap_id)
-    local r, err, tur = Api:yenidenOkumaBaslat(kitap_id)
+--- Okudum olan kitaba yeni okuma ekler (kuyruk işi olarak döner). durum: Okuyorum (varsayılan,
+-- yeniden okumaya başladın) ya da Okudum (yeniden okuyup bitirdin, okuma olarak eklensin).
+function BinKitap:yenidenOkumaGonder(kitap_id, durum)
+    durum = durum or Api.DURUM.okuyorum
+    local r, err, tur = Api:yeniOkumaEkle(kitap_id, durum)
     if not r then return nil, err, tur end
     -- Kendi değişikliğimizi "sitede değişmiş" sanıp KOReader'a geri yansıtmayalım
-    if self.bkDurumKaydet then self:bkDurumKaydet(kitap_id, Api.DURUM.okuyorum, true) end
-    self:yenidenOkumaIsaretle(kitap_id)
-    return { yeni_okuma = true, durum_metni = _("yeni okuma başladı (eski okuman duruyor)") }
+    if self.bkDurumKaydet then self:bkDurumKaydet(kitap_id, durum, true) end
+    if durum == Api.DURUM.okuyorum then
+        self:yenidenOkumaIsaretle(kitap_id)
+        return { yeni_okuma = true, durum_metni = _("yeni okuma başladı (önceki okumaların duruyor)") }
+    end
+    self:okudumKaydet(kitap_id)
+    if self.hedefBildirimiPlanla then pcall(self.hedefBildirimiPlanla, self) end
+    return { yeni_okuma = true, durum_metni = _("Okudum, yeni okuma olarak eklendi (önceki okumaların duruyor)") }
 end
 
---- Okunmuş kitap yeniden açılınca bir kez sorar (oturum başına, "Hayır" 30 gün hatırlanır).
-function BinKitap:yenidenOkumaSor(oge)
+--- Okunmuş kitap yeniden okunuyor/bitirildi görünce bir kez sorar (oturum başına).
+-- hedef = Okuyorum: yeniden okumaya mı başladın? ("Hayır" 30 gün hatırlanır)
+-- hedef = Okudum: yeniden okuyup bitirdin, bu okuma yeni okuma olarak eklensin mi?
+function BinKitap:yenidenOkumaSor(oge, hedef)
+    hedef = hedef or Api.DURUM.okuyorum
     local id = tostring(oge.kitap_id)
+    local anahtar = id .. ":" .. hedef
     ORTAK.yeniden_sorulan = ORTAK.yeniden_sorulan or {}
-    if ORTAK.yeniden_sorulan[id] then return end
+    if ORTAK.yeniden_sorulan[anahtar] then return end
+    local bitti = hedef == Api.DURUM.okudum
     local red = self.settings:readSetting("yeniden_okuma_red")
-    if type(red) == "table" and red[id] and os.time() - red[id] < YENIDEN_RED_SURESI then return end
-    ORTAK.yeniden_sorulan[id] = true
+    if not bitti and type(red) == "table" and red[id] and os.time() - red[id] < YENIDEN_RED_SURESI then return end
+    ORTAK.yeniden_sorulan[anahtar] = true
     UIManager:scheduleIn(1, function()
         local dialog
-        dialog = ButtonDialog:new{
-            title = T(_("“%1” 1000Kitap'ta \"Okudum\" görünüyor.\n\nYeniden mi okuyorsun? Eski okuman olduğu gibi kalır; 1000Kitap'ta yeni bir okuma başlar (2. okuma gibi)."),
-                oge.kitap_adi or id),
-            title_align = "left",
-            buttons = {
-                {{ text = _("Yeniden okuyorum: yeni okuma başlat"), callback = function()
-                    UIManager:close(dialog)
-                    self:siraya({ tur = "durum", kitap_id = oge.kitap_id, kitap_adi = oge.kitap_adi, durum = Api.DURUM.okuyorum })
-                    if not Api:kimlikVar() then return self:kimlikUyarisi() end
-                    NetworkMgr:runWhenOnline(function() self:kuyruguGonder(false) end)
-                end }},
+        local function evet()
+            UIManager:close(dialog)
+            ORTAK.yeniden_sorulan[anahtar] = nil
+            self:siraya({ tur = "durum", kitap_id = oge.kitap_id, kitap_adi = oge.kitap_adi, durum = hedef, yeni_okuma = true })
+            if not Api:kimlikVar() then return self:kimlikUyarisi() end
+            NetworkMgr:runWhenOnline(function() self:kuyruguGonder(false) end)
+        end
+        local baslik, dugmeler
+        if bitti then
+            baslik = T(_("“%1” 1000Kitap'ta zaten \"Okudum\" görünüyor.\n\nBu kitabı yeniden okuyup bitirdiysen bu okumayı yeni bir okuma (2., 3., 4. … okuma) olarak ekleyeyim mi? Önceki okumaların olduğu gibi kalır."),
+                oge.kitap_adi or id)
+            dugmeler = {
+                {{ text = _("Yeni okuma olarak ekle"), callback = evet }},
+                {{ text = _("Hayır, aynı okuma"), callback = function() UIManager:close(dialog) end }},
+            }
+        else
+            baslik = T(_("“%1” 1000Kitap'ta \"Okudum\" görünüyor.\n\nYeniden mi okuyorsun? Önceki okumaların olduğu gibi kalır; 1000Kitap'ta yeni bir okuma (2., 3., 4. … okuma) başlar."),
+                oge.kitap_adi or id)
+            dugmeler = {
+                {{ text = _("Yeniden okuyorum: yeni okuma başlat"), callback = evet }},
                 {{ text = _("Hayır, sadece bakıyorum"), callback = function()
                     UIManager:close(dialog)
                     local r = self.settings:readSetting("yeniden_okuma_red") or {}
@@ -1548,8 +1573,9 @@ function BinKitap:yenidenOkumaSor(oge)
                     self.settings:flush()
                 end }},
                 {{ text = _("Sonra sor"), callback = function() UIManager:close(dialog) end }},
-            },
-        }
+            }
+        end
+        dialog = ButtonDialog:new{ title = baslik, title_align = "left", buttons = dugmeler }
         UIManager:show(dialog)
     end)
 end
@@ -1609,6 +1635,15 @@ function BinKitap:ogeGonder(oge)
         -- Aynı durumu tekrar göndermek onu kaldırabilir; önce mevcut duruma bak.
         local m, err, tur = Api:okumaDurumu(oge.kitap_id)
         if not m then return nil, err, tur end
+        if m.durum == Api.DURUM.okudum and oge.durum == Api.DURUM.okudum then
+            -- Zaten Okudum: onaylanmışsa yeni okuma olarak ekle; bitiş ekranından ya da elle
+            -- geldiyse sor (yeniden okuyup bitirmiş olabilirsin); toplu/kendiliğinden ise dokunma.
+            if oge.yeni_okuma then return self:yenidenOkumaGonder(oge.kitap_id, Api.DURUM.okudum) end
+            if oge.elle and not oge.otomatik and not self:yeniOkudum(oge.kitap_id) then
+                self:yenidenOkumaSor(oge, Api.DURUM.okudum)
+            end
+            return { atlandi = true }
+        end
         if m.durum == oge.durum then return { atlandi = true } end
         if oge.sadece_bossa and m.durum ~= Api.DURUM.yok then return { atlandi = true } end
         if m.durum == Api.DURUM.okudum and oge.durum ~= Api.DURUM.okudum then
@@ -2280,7 +2315,7 @@ function BinKitap:yenidenOkumaMenusu()
         text_func = function()
             return T(_("Okunmuş kitabı yeniden açınca: %1"), adlar[self:yenidenOkumaAyari()])
         end,
-        help_text = _("1000Kitap'ta \"Okudum\" olan bir kitabı yeniden okumaya başladığında ne olsun? Yeni okuma eski okumanı bozmaz; 1000Kitap'ta ikinci (üçüncü…) okuma olarak görünür. Menüden elle \"Okuyorum\" seçersen de böyle olur."),
+        help_text = _("1000Kitap'ta \"Okudum\" olan bir kitabı yeniden okumaya başladığında ne olsun? Yeni okuma önceki okumalarını bozmaz; 1000Kitap'ta 2., 3., 4. … okuma olarak görünür. Menüden elle \"Okuyorum\" seçersen de böyle olur. Zaten Okudum olan kitabı yeniden bitirince de yeni okuma olarak eklemeyi sorar."),
         sub_item_table = {
             secenek("sor", _("Sor (önerilen)")),
             secenek("otomatik", _("Sormadan yeni okuma başlat")),

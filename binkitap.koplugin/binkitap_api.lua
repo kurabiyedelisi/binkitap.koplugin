@@ -677,16 +677,18 @@ function Api:durumAyarla(kitap_id, durum, tarih)
     }, nil, true)
 end
 
---- Okudum olan kitapta yeni bir okuma başlatır (yeniden okuma): eski "Okudum" kaydı durur,
--- 1000Kitap'ta "2. okuma" açılır. Sitedeki "+ → 2. okumayı ekle → Okuyorum" ile birebir aynı
--- istek (Kasım 2026'da sitede izlendi): durum + yeniOkuma=1. Düz istek (yeniOkuma=0) ise
--- mevcut okumanın durumunu değiştirir, eski Okudum'u Okuyorum'a çevirir.
--- Gönderdikten sonra durumu yeniden okur: Okuyorum olmadıysa hata döner.
-function Api:yenidenOkumaBaslat(kitap_id)
+--- Kitaba yeni bir okuma ekler (2., 3., 4. … okuma); önceki okumalar olduğu gibi kalır.
+-- Sitedeki "+ → N. okumayı ekle → <durum>" ile birebir aynı istek (Kasım 2026'da sitede
+-- izlendi): durum + yeniOkuma=1. Düz istek (yeniOkuma=0) ise mevcut okumanın durumunu
+-- değiştirir, ör. eski Okudum'u Okuyorum'a çevirir.
+-- Okuyorum için gönderdikten sonra durumu yeniden okur: Okuyorum olmadıysa hata döner.
+function Api:yeniOkumaEkle(kitap_id, durum)
+    durum = durum or Api.DURUM.okuyorum
     local r, err, tur = self:istek("GET", "kitaplar/kitapOku", {
-        { "id", kitap_id }, { "durum", Api.DURUM.okuyorum }, { "yeniOkuma", 1 }, { "neOkusam", 0 },
+        { "id", kitap_id }, { "durum", durum }, { "yeniOkuma", 1 }, { "neOkusam", 0 },
     }, nil, true)
     if not r then return nil, err, tur end
+    if durum ~= Api.DURUM.okuyorum then return r end
     local m = self:okumaDurumu(kitap_id)
     if m and m.durum ~= Api.DURUM.okuyorum then
         local hata = ("1000Kitap yeni okumayı başlatmadı (durum: %s)."):format(
@@ -695,6 +697,11 @@ function Api:yenidenOkumaBaslat(kitap_id)
         return nil, hata, "sunucu"
     end
     return r
+end
+
+--- Okudum olan kitapta yeni bir "Okuyorum" okuması başlatır (yeniden okuma).
+function Api:yenidenOkumaBaslat(kitap_id)
+    return self:yeniOkumaEkle(kitap_id, Api.DURUM.okuyorum)
 end
 
 function Api:puanVer(kitap_id, puan)
