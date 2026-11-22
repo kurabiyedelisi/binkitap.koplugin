@@ -11,7 +11,7 @@ Okuma
   GET  v2/kitaplar/basimlar?kitapId=&sayfa=&kume=&z=      baskılar
   GET  v2/uye/kitap/modalVeBasimlar?kitapId=              senin bu kitaptaki durumun
   GET  v2/uyeler/kitaplar/liste?kadi=&raf=okuyacaklari    okuyacaklar listesi (kitaplık: raf=kutuphanesi)
-  GET  v2/okurlar/okurCekV2?id=&bolum=alintilar           bir okurun alıntıları
+  GET  v2/okurlar/okurCekV2?id=&bolum=alintilar           bir okurun alıntıları (öğe: id, turu=sozler, alt.sozler)
   GET  v2/okuma-hedefleri/sene-detay?sene=                okuma hedefi
   GET  v2/konular/konuArama?q=                            konu arama
   GET  analiz…/v2/kitaplar/tanidikOkurlar?id=             takip ettiklerinden okuyanlar
@@ -26,6 +26,7 @@ Yazma
   GET  v2/kitaplar/kitapSayfaGuncelle?id=&okumaId=&sayfa=&sayfa2=   ilerleme
   GET  v2/kitaplar/kitapKutuphanemeEkle?id=&forceEkle=1   kitaplığa ekle (forceEkle=0: ekle/çıkar)
   POST v2/alintilar/alintiEkle                            alıntı
+  GET  v2/alintilar/alintiKaldir?id=                      alıntı sil (id: listedeki öğenin id'si; sitenin kendisi böyle siler)
   POST v2/koleksiyonlar/not-ayarla                        özel not
   POST v2/kitaplar/kitapIncelemeKaydet?kitapId=&id=       inceleme
   POST v2/uyeler/okumalar/gunluk/seansTamamla             okuma seansı
@@ -589,11 +590,24 @@ function Api:okurAlintilari(kadi, sayfalama_bilgisi, kitap_id)
         if type(o) == "table" and o.turu == "sozler" then
             local soz, ham = sozMetni(o)
             if soz then
-                liste[#liste + 1] = { soz = soz, kitap_id = ham and yazi(ham.kitapid) or "" }
+                liste[#liste + 1] = {
+                    soz = soz,
+                    kitap_id = ham and yazi(ham.kitapid) or "",
+                    id = yazi(o.id), -- silmek için (sitenin kullandığı kimlik)
+                    -- hangisi önce: kimlikler zamanla artar; varsa zaman da
+                    zaman = tonumber(o.tarihsaatTime) or tonumber(o.siralamaTime)
+                        or (ham and (tonumber(ham.tarihsaatTime) or tonumber(ham.siralamaTime))) or nil,
+                }
             end
         end
     end
     return liste, sayfalama(data._sonuc)
+end
+
+--- Kendi alıntını siler (okurAlintilari'ndaki id ile). Geri alınamaz.
+function Api:alintiKaldir(id)
+    if not id or id == "" then return nil, "Alıntı kimliği yok.", "sunucu" end
+    return self:istek("GET", "alintilar/alintiKaldir", { { "id", id } }, nil, true)
 end
 
 --- Takip ettiklerinden bu kitabı okuyanların adları.

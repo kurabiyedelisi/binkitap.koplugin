@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.3.4 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.3.5 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -182,6 +182,15 @@ Kobo'nun kendi okuyucusunda (Nickel) yaptıklarını KOReader'a aktarır. Önced
 - **Arka planda çalışır.** Listeler ve okuma ilerlemesi hemen aktarılır; notlar için kitaplar arka planda birer birer açılıp taranır, sen bu sırada okumaya devam edersin. Ne kadarının bittiği (yüzde, hangi kitap, kaç not) Kobo menüsünün ve 1000Kitap ekranındaki Kobo düğmesinin üstünde görünür; dokununca ayrıntı ve **Durdur** çıkar. Bitince kısa bir özet gelir. Durdurursan bitenler kaydedilir, kalanlar bir sonraki taramada sürer. Açtığın kitabın yeni Kobo notları da arka planda eklenir.
 - **Hızlı arama.** Her not, Kobo'nun kaydettiği bölümde, bulunduğu yerin biraz öncesinden aranır; ancak orada bulunamazsa bütün kitapta aranır. İlk aktarım (yüzlerce notlu eski kitaplar) yine biraz sürebilir; sonrakilerde yalnızca yeni notlar aranır.
 - **Eski Kobo Senkron eklentisini kullanıyorduysan:** ayarların, aktarılmış notların, hareketlerin ve SimpleUI'deki Kobo düğmen aynen çalışır. Eski eklenti hâlâ açıksa, ikisi aynı işi yapmasın diye Kobo işlerini o yapar ve 1000Kitap onu kapatmayı önerir. Kapatınca `koreader/plugins/kobosync.koplugin` klasörünü silebilirsin.
+
+### Yinelenen alıntıları temizle
+
+**Araçlar → 1000Kitap → Yinelenen alıntıları temizle.** Profilindeki Alıntılar bölümünü baştan sona okur. Aynı kitapta metni aynı olan alıntılardan (boşluk, noktalama, tırnak ve büyük/küçük harf farkı gözetilmez) **ilk gönderileni bırakır**, sonrakileri silinmek üzere sayar. Silmeden önce kaç tane olduğunu ve listesini gösterir, onay ister; silmek geri alınamaz.
+
+- Hangisinin önce gönderildiği anlaşılamayan gruplara, tek kopyası olan alıntılara ve kitabı bilinmeyen alıntılara dokunmaz.
+- Yavaş çalışır (sayfalar arası 1,5 sn, silmeler arası 4 sn). Okuma yarıda kalırsa ya da 1000Kitap "çok fazla istek" derse hiçbir şey silmez; silerken bir hata olursa durur.
+- İlk silmeden sonra listeyi yeniden okuyup silinenin gittiğini, kalanın durduğunu doğrular; tutmazsa başka hiçbir şeyi silmez.
+- Ayarlar'da 1000Kitap kullanıcı adının girili olması gerekir.
 
 ### Kısayollar ve çevrimdışı kullanım
 

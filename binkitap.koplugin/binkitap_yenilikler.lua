@@ -3,6 +3,12 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.5",
+        maddeler = {
+            "Yinelenen alıntıları temizle (1000Kitap menüsünde): profilindeki Alıntılar bölümünü okur, aynı kitapta aynı metne sahip alıntılardan ilk gönderileni bırakıp sonrakileri, sayısını ve listesini gösterip onaylarsan siler. Yavaş çalışır; 1000Kitap yoğunsa ya da bir hata olursa durur. İlk silmeden sonra doğru alıntının gittiğini kontrol eder, tutmazsa başka hiçbir şeyi silmez.",
+        },
+    },
+    {
         surum = "1.3.4",
         maddeler = {
             "Gönderilenleri 1000Kitap'la karşılaştır artık 1000Kitap'ın kitaba göre süzmesine güvenmiyor (bazen süzemiyor): profilindeki bütün alıntıları bir kez okuyup karşılaştırıyor. Tırnak, noktalama ve büyük/küçük harf farkları yok sayılıyor. Okuma yarıda kalırsa hiçbir şey değişmiyor.",

@@ -9,6 +9,7 @@ GitHub'dan güncelleme: binkitap_guncelle.lua
 İleti yazma: binkitap_ileti.lua
 Okuduklarını aktarma: binkitap_aktar.lua
 Kobo Senkron (Kobo notlarını KOReader'a aktarma): binkitap_kobo.lua, binkitap_kobo_*.lua
+Yinelenen alıntıları temizleme: binkitap_yineleme.lua
 ]]
 
 local ButtonDialog = require("ui/widget/buttondialog")
@@ -2429,6 +2430,12 @@ function BinKitap:menuOgeleri()
             sub_item_table_func = function() return self:koboMenusu() end,
         }
     end
+    ogeler[#ogeler + 1] = {
+        text = _("Yinelenen alıntıları temizle"),
+        help_text = _("1000Kitap profilindeki Alıntılar bölümünü okur; aynı kitapta aynı metne sahip alıntılardan ilk gönderileni bırakıp sonrakileri, onaylarsan siler."),
+        enabled_func = function() return Api:kimlikVar() end,
+        callback = function() self:yinelenenAlintilar() end,
+    }
     ogeler[#ogeler + 1] = self:bekleyenlerMenuOgesi()
     ogeler[#ogeler + 1] = { text = _("Ayarlar"), sub_item_table_func = function() return self:ayarlarMenusu() end }
     return ogeler
@@ -2442,6 +2449,7 @@ yukle("binkitap_ileti")(BinKitap)
 yukle("binkitap_aktar")(BinKitap)
 yukle("binkitap_durum")(BinKitap)
 yukle("binkitap_ekran")(BinKitap)
+yukle("binkitap_yineleme")(BinKitap)
 -- Kobo Senkron yüklenemezse (ör. eksik dosya) 1000Kitap onsuz çalışır
 do
     local ok, hata = pcall(function() yukle("binkitap_kobo")(BinKitap) end)
