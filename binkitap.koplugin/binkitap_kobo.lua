@@ -18,6 +18,9 @@ Eski eklenti hâlâ açıksa Kobo işlerini o yapar (ikisi aynı anda aktarması
 ]]
 
 local ButtonDialog = require("ui/widget/buttondialog")
+local ConfirmBox = require("ui/widget/confirmbox")
+local InfoMessage = require("ui/widget/infomessage")
+local NetworkMgr = require("ui/network/manager")
 local Dispatcher = require("dispatcher")
 local UIManager = require("ui/uimanager")
 local logger = require("logger")
@@ -38,11 +41,13 @@ end
 
 local Kobo = yukle("binkitap_kobo_senkron")
 local KoboDB = yukle("binkitap_kobo_db")
+local KUtil = yukle("binkitap_kobo_util")
 
 local ESKI_AD = "kobosync"            -- eski eklentinin klasör adı (kobosync.koplugin)
 local eski_soruldu = false            -- bu KOReader oturumunda soruldu mu
 
 return function(BinKitap)
+    local Api = BinKitap.Api
     BinKitap.Kobo = Kobo
     BinKitap.KoboDB = KoboDB
 
@@ -269,11 +274,21 @@ return function(BinKitap)
             end
         end
         table.sort(hazir, function(x, y) return tostring(x.kitap.adi) < tostring(y.kitap.adi) end)
+        local karsilastir = { text = _("1000Kitap'ta olmayanları bul"), callback = function() self:koboKarsilastir() end }
         if #hazir == 0 and #dogrulanmamis == 0 then
-            if eslesmemis > 0 then
-                return self:bildir(T(_("Kobo'dan gelen gönderilmemiş vurgular %1 kitapta, ama bu kitaplar 1000Kitap'ta eşleşmemiş. Önce Kütüphaneyi eşleştir'i çalıştır."), eslesmemis), 6)
-            end
-            return self:bildir(_("1000Kitap'a gönderilmemiş Kobo vurgusu yok."), 3)
+            local metin = eslesmemis > 0
+                and T(_("Kobo'dan gelen gönderilmemiş vurgular %1 kitapta, ama bu kitaplar 1000Kitap'ta eşleşmemiş. Önce Kütüphaneyi eşleştir'i çalıştır."), eslesmemis)
+                or _("1000Kitap'a gönderilmemiş Kobo vurgusu yok.")
+            local dialog
+            dialog = ButtonDialog:new{
+                title = metin .. "\n\n" .. _("Gönderildi görünen ama 1000Kitap'ta olmayan (ör. günlük sınıra takılıp reddedilen) vurguları bulmak için alıntılarınla karşılaştırabilirsin."),
+                title_align = "left",
+                buttons = {
+                    {{ text = karsilastir.text, callback = function() UIManager:close(dialog); karsilastir.callback() end }},
+                    {{ text = _("Kapat"), callback = function() UIManager:close(dialog) end }},
+                },
+            }
+            return UIManager:show(dialog)
         end
 
         local function kitapKitapSec()
@@ -307,7 +322,189 @@ return function(BinKitap)
             baslik = baslik .. "\n" .. T(_("%1 kitap 1000Kitap'ta eşleşmediği için atlanacak."), eslesmemis)
         end
         self:koboGonderSor(baslik, function(ozel) self:aktarilanVurgulariSirala(hazir, ozel) end,
-            {{ text = _("Kitap kitap seç"), callback = kitapKitapSec }})
+            {{ text = _("Kitap kitap seç"), callback = kitapKitapSec }, karsilastir})
+    end
+
+    ---------------------------------------------------------------------------
+    -- "Gönderildi" işaretli Kobo vurgularını 1000Kitap'taki alıntılarla karşılaştır
+    --
+    -- 1.3.3'ten önce 1000Kitap'ın reddettiği alıntılar (ör. "1 günde en fazla 500
+    -- alıntı") sıradan silinirdi ama vurgu "gönderildi" işaretli kalırdı. Burada her
+    -- kitap için profilindeki alıntılar okunur (yalnızca okuma), orada olmayan
+    -- vurgunun işareti kaldırılır: tekrar gönderilebilir olur.
+    ---------------------------------------------------------------------------
+
+    local function normal(s)
+        local ok, n = pcall(KUtil.normalize, s or "")
+        return ok and n or ""
+    end
+
+    --- Yerel vurgu metni sitedeki alıntılardan birinde var mı? (site uzunları kısaltabilir)
+    local function sitedeVar(yerel, site)
+        local a = normal(yerel)
+        if a == "" then return true end
+        local bas = a:sub(1, 40)
+        for _i, b in ipairs(site) do
+            if b:find(bas, 1, true) or (#b >= 20 and a:find(b:sub(1, 40), 1, true)) then return true end
+        end
+        return false
+    end
+    BinKitap._sitedeVar = sitedeVar
+
+    function BinKitap:koboKarsilastir()
+        local kadi = self.kullanici_adi
+        if not kadi or kadi == "" then
+            return self:hataGoster(_("Bunun için Ayarlar'da 1000Kitap kullanıcı adını gir (profil adresindeki ad)."))
+        end
+        if not self.kobo or not KoboDB.exists(self.kobo:dbPath()) then
+            return self:bildir(_("Kobo veritabanı bulunamadı."), 3)
+        end
+        local db = KoboDB.read(self.kobo:dbPath(), { bookmarks = true })
+        if not db then return self:bildir(_("Kobo veritabanı okunamadı."), 3) end
+        local DocSettings = require("docsettings")
+        local kitaplar, toplam = {}, 0
+        for dosya, recs in pairs(db.annotations) do
+            local ok_ds, ds = pcall(function()
+                return DocSettings:hasSidecarFile(dosya) and DocSettings:open(dosya) or nil
+            end)
+            if ok_ds and ds then
+                local ann = ds:readSetting("annotations")
+                local gonderilen = ds:readSetting("binkitap_gonderilen") or {}
+                pcall(Kobo.kimlikleriTamamla, ann, recs)
+                local k = ds:readSetting("binkitap")
+                if type(k) ~= "table" or not k.id then k = self:dosyaEslesmesi(dosya) end
+                if type(k) == "table" and k.id then
+                    local adaylar = {}
+                    for _i, a in ipairs(type(ann) == "table" and ann or {}) do
+                        local isaret = a.kobo_id and a.drawer and gonderilen[self:vurguAnahtari(a)]
+                        -- gizli gönderilenler alıntılarda görünmez: onlara dokunma
+                        if isaret and isaret ~= "gizli" and kirp(a.text) ~= "" then adaylar[#adaylar + 1] = a end
+                    end
+                    if #adaylar > 0 then
+                        kitaplar[#kitaplar + 1] = { yol = dosya, kitap = k, adaylar = adaylar }
+                        toplam = toplam + #adaylar
+                    end
+                end
+            end
+        end
+        if #kitaplar == 0 then
+            return self:bildir(_("Gönderildi diye işaretli Kobo vurgusu yok."), 3)
+        end
+        table.sort(kitaplar, function(x, y) return tostring(x.kitap.adi) < tostring(y.kitap.adi) end)
+        UIManager:show(ConfirmBox:new{
+            text = T(_("%1 kitapta \"gönderildi\" işaretli %2 Kobo vurgusu, 1000Kitap'taki alıntılarınla karşılaştırılacak. Orada olmayanlar yeniden gönderilebilir olur.\n\nYalnızca okur, hesabına bir şey yazmaz.\n\n1.3.3'ten önce gizli gönderdiğin vurgular alıntılarında görünmediği için onlar da yeniden gönderilebilir olarak işaretlenebilir."), #kitaplar, toplam),
+            ok_text = _("Karşılaştır"),
+            ok_callback = function()
+                NetworkMgr:runWhenOnline(function() self:koboKarsilastirCalistir(kadi, kitaplar) end)
+            end,
+        })
+    end
+
+    function BinKitap:koboKarsilastirCalistir(kadi, kitaplar)
+        local DocSettings = require("docsettings")
+        local i, sayfa, site, iptal, kutu = 1, nil, {}, false, nil
+        local filtresiz -- 1000Kitap kitap süzgecini yok sayarsa bütün alıntılar bir kez okunur
+        local function goster()
+            if kutu then UIManager:close(kutu) end
+            kutu = InfoMessage:new{
+                text = T(_("1000Kitap'taki alıntılarınla karşılaştırılıyor… %1\n\n%2 / %3 kitap: %4\n\nDurdurmak için dokun."),
+                    BinKitap.yuzde(i - 1, #kitaplar), math.min(i, #kitaplar), #kitaplar, kitaplar[math.min(i, #kitaplar)].kitap.adi or ""),
+                dismiss_callback = function() iptal = true; kutu = nil end,
+            }
+            UIManager:show(kutu)
+        end
+        local function eksikleriBul(e, metinler)
+            e.eksik = {}
+            for _j, a in ipairs(e.adaylar) do
+                if not sitedeVar(a.text, metinler) then e.eksik[#e.eksik + 1] = self:vurguAnahtari(a) end
+            end
+        end
+        local function isaretle()
+            local n = 0
+            for _j, e in ipairs(kitaplar) do
+                if e.eksik and #e.eksik > 0 then
+                    local ds = DocSettings:open(e.yol)
+                    local gonderilen = ds:readSetting("binkitap_gonderilen") or {}
+                    for _k, anahtar in ipairs(e.eksik) do
+                        if gonderilen[anahtar] then gonderilen[anahtar] = nil; n = n + 1 end
+                    end
+                    ds:saveSetting("binkitap_gonderilen", gonderilen)
+                    pcall(function() ds:flush() end)
+                end
+            end
+            return n
+        end
+        local function bitir(hata)
+            if kutu then UIManager:close(kutu); kutu = nil end
+            if hata then return self:hataGoster(hata) end -- hiçbir şey değişmedi
+            local eksik, kitap_sayisi = 0, 0
+            for _j, e in ipairs(kitaplar) do
+                if e.eksik and #e.eksik > 0 then eksik = eksik + #e.eksik; kitap_sayisi = kitap_sayisi + 1 end
+            end
+            local ek = iptal and ("\n" .. _("Durduruldu; yalnızca bakılan kitaplar sayıldı.")) or ""
+            if eksik == 0 then
+                return self:bildir(_("Karşılaştırılan bütün Kobo vurguları 1000Kitap'ta var.") .. ek, 5)
+            end
+            local sinir = self:sinirMetni()
+            local dialog
+            dialog = ButtonDialog:new{
+                title = T(_("%1 Kobo vurgusu 1000Kitap'taki alıntılarında yok (%2 kitap)."), eksik, kitap_sayisi) .. ek
+                    .. "\n\n" .. _("Yeniden gönderilebilir olarak işaretlensin mi? Sayı beklediğinden çok fazlaysa Vazgeç: hiçbir şey değişmez.")
+                    .. (sinir and ("\n\n" .. sinir) or ""),
+                title_align = "left",
+                buttons = {
+                    {{ text = _("İşaretle ve gönder"), callback = function()
+                        UIManager:close(dialog)
+                        isaretle()
+                        self:koboTumunuGonder()
+                    end }},
+                    {{ text = _("Yalnızca işaretle"), callback = function()
+                        UIManager:close(dialog)
+                        local n = isaretle()
+                        self:bildir(T(_("%1 vurgu yeniden gönderilebilir olarak işaretlendi."), n), 4)
+                    end }},
+                    {{ text = _("Vazgeç"), callback = function() UIManager:close(dialog) end }},
+                },
+            }
+            UIManager:show(dialog)
+        end
+        local adim
+        adim = function()
+            if iptal then return bitir() end
+            local e = kitaplar[i]
+            if not e then return bitir() end
+            local liste, sonraki = Api:okurAlintilari(kadi, sayfa, (not filtresiz) and e.kitap.id or nil)
+            if not liste then return bitir(T(_("1000Kitap'a ulaşılamadı, hiçbir şey değişmedi: %1"), tostring(sonraki or "?"))) end
+            for _j, o in ipairs(liste) do
+                if filtresiz == nil and o.kitap_id ~= "" and tostring(o.kitap_id) ~= tostring(e.kitap.id) then
+                    filtresiz = true -- süzgeç çalışmıyor: alıntıları kitaplarına göre ayır
+                end
+                local kid = (o.kitap_id ~= "" and tostring(o.kitap_id)) or tostring(e.kitap.id)
+                site[kid] = site[kid] or {}
+                table.insert(site[kid], normal(o.soz))
+            end
+            if filtresiz == nil and #liste > 0 then filtresiz = false end
+            sayfa = sonraki
+            if sayfa then
+                if filtresiz and (sayfa.sayfa or 0) > 100 then
+                    -- hepsini okuyamadık: eksik sanıp çift gönderme riski var, hiçbir şeye dokunma
+                    return bitir(_("1000Kitap alıntıları kitaba göre vermedi ve alıntıların bir seferde okunamayacak kadar çok. Karşılaştırma yapılmadı, hiçbir şey değişmedi."))
+                end
+                return UIManager:scheduleIn(0.3, adim)
+            end
+            if filtresiz then
+                for _j, k in ipairs(kitaplar) do eksikleriBul(k, site[tostring(k.kitap.id)] or {}) end
+                i = #kitaplar + 1
+                return bitir()
+            end
+            eksikleriBul(e, site[tostring(e.kitap.id)] or {})
+            i, sayfa = i + 1, nil
+            if i > #kitaplar then return bitir() end
+            goster()
+            UIManager:scheduleIn(0.3, adim)
+        end
+        goster()
+        UIManager:scheduleIn(0.3, adim)
     end
 
     --- Arka planda Kobo aktarımı sürüyor mu (eski eklenti açıksa hayır)
@@ -358,6 +555,13 @@ return function(BinKitap)
             help_text = _("Kobo'dan aktarılan ve henüz gönderilmemiş vurguları tek seferde 1000Kitap'a alıntı olarak gönderir. Herkese açık mı gizli mi diye bir kez sorar."),
             callback = function() self:koboVurgulariniGonder() end,
         })
+        if not self.ui.document then
+            table.insert(ogeler, math.min(#ogeler + 1, once + 3), {
+                text = _("Gönderilenleri 1000Kitap'la karşılaştır"),
+                help_text = _("Gönderildi diye işaretli Kobo vurgularını 1000Kitap'taki alıntılarınla karşılaştırır; orada olmayanları (ör. günlük sınıra takılıp reddedilenleri) yeniden gönderilebilir yapar. Yalnızca okur."),
+                callback = function() self:koboKarsilastir() end,
+            })
+        end
         return ogeler
     end
 end

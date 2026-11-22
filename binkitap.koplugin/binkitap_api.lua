@@ -575,11 +575,11 @@ function Api:populerIncelemeler(kitap_id)
 end
 
 --- Bir okurun alıntıları. Dönüş: liste {soz, kitap_id}, sonraki_sayfa
-function Api:okurAlintilari(kadi, sayfalama_bilgisi)
+function Api:okurAlintilari(kadi, sayfalama_bilgisi, kitap_id)
     local s = sayfalama_bilgisi or { sayfa = 1, kume = -1, z = 0 }
     local data, err, tur = self:istek("GET", "okurlar/okurCekV2", {
         { "id", kadi }, { "bolum", "alintilar" }, { "s", "" }, { "sene", "" }, { "q", "" },
-        { "kitapId", "" }, { "konuId", "" },
+        { "kitapId", kitap_id and tostring(kitap_id) or "" }, { "konuId", "" },
         { "sayfa", s.sayfa }, { "kume", s.kume }, { "z", s.z },
     }, nil, false)
     if not data then return nil, err, tur end

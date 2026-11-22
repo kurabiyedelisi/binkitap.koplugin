@@ -154,7 +154,7 @@ return function(BinKitap)
         local ogeler = {}
         for _i, a in ipairs(secilenler) do
             ogeler[#ogeler + 1] = self:vurgudanOge(kitap, a, ozel)
-            gonderilen[self:vurguAnahtari(a)] = true
+            gonderilen[self:vurguAnahtari(a)] = ozel and "gizli" or "acik"
         end
         self.ui.doc_settings:saveSetting("binkitap_gonderilen", gonderilen)
         self:topluSiraya(ogeler)

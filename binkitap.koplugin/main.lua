@@ -1050,7 +1050,8 @@ function BinKitap:renkTaramasi()
         if eylem and kirp(a.text) ~= "" and tostring(a.datetime or "") > esik then
             local anahtar = self:vurguAnahtari(a)
             if not gonderilen[anahtar] then
-                gonderilen[anahtar] = true
+                -- nasıl gönderildiği: 1000Kitap'la karşılaştırırken gizliler atlanır
+                gonderilen[anahtar] = (eylem == "ozel") and "gizli" or "acik"
                 self:siraya(self:vurgudanOge(kitap, a, eylem == "ozel"))
                 eklenen = eklenen + 1
             end
@@ -1550,8 +1551,48 @@ local OZET_METNI = {
 --- Sırayı arka planda, okumayı bölmeden yavaş yavaş gönderir: bir seferde tek iş,
 -- işler arasında ARKA_ARALIK saniye; sayfa yeni çevrildiyse biraz bekler. Ağ yoksa durur,
 -- Wi-Fi gelince (onNetworkConnected) kaldığı yerden sürer. Bitince kısa bir özet gösterir.
+--- 1000Kitap'ın günlük sınırı ("Sıkı okur olarak 1 günde en fazla 500 alıntı
+--- paylaşabilirsiniz"): o türden iş bugün bir daha denenmez, sırada bekler ve
+--- ertesi gün kendiliğinden gönderilir. Silinmez.
+function BinKitap.gunlukSinirMi(err)
+    err = tostring(err or "")
+    return err:find("günde en fazla", 1, true) ~= nil or err:find("gunde en fazla", 1, true) ~= nil
+end
+
+function BinKitap:sinirliTurler()
+    local s = self.settings:readSetting("gunluk_sinir")
+    if type(s) ~= "table" or s.tarih ~= os.date("%Y-%m-%d") or type(s.turler) ~= "table" then return {} end
+    return s.turler
+end
+
+function BinKitap:sinirKaydet(tur)
+    local bugun = os.date("%Y-%m-%d")
+    local s = self.settings:readSetting("gunluk_sinir")
+    if type(s) ~= "table" or s.tarih ~= bugun or type(s.turler) ~= "table" then s = { tarih = bugun, turler = {} } end
+    s.turler[tur] = true
+    self.settings:saveSetting("gunluk_sinir", s)
+end
+
+--- Sıradaki gönderilebilir işin yeri (bugün sınırı dolan türler atlanır).
+function BinKitap:siradakiYer(k)
+    local engel = self:sinirliTurler()
+    for i, oge in ipairs(k) do
+        if not engel[oge.tur] then return i end
+    end
+end
+
+--- Sınır yüzünden bekleyenler için tek satır.
+function BinKitap:sinirMetni(k)
+    local engel = self:sinirliTurler()
+    local n = 0
+    for _i, oge in ipairs(k or self:kuyruk()) do if engel[oge.tur] then n = n + 1 end end
+    if n == 0 then return nil end
+    return T(_("1000Kitap'ın günlük sınırı doldu: %1 alıntı sırada bekliyor, yarın kendiliğinden gönderilir. Hiçbiri silinmedi."), n)
+end
+
 function BinKitap:yavasGonder()
     if ORTAK.arka_plan or #self:kuyruk() == 0 or not Api:kimlikVar() then return end
+    if not self:siradakiYer(self:kuyruk()) then return end -- hepsi günlük sınırda
     ORTAK.arka_plan = { gonderilen = 0, hata = 0, hatalar = {} }
     local adim
     local function devam(sn) UIManager:scheduleIn(sn, adim) end
@@ -1567,7 +1608,8 @@ function BinKitap:yavasGonder()
             for _i, h in ipairs(d.hatalar) do satirlar[#satirlar + 1] = h end
         end
         if mesaj then satirlar[#satirlar + 1] = mesaj end
-        if #satirlar > 0 and (d.gonderilen + d.hata >= TOPLU_ESIK or d.hata > 0 or mesaj) then
+        if d.sinir then satirlar[#satirlar + 1] = self:sinirMetni() end
+        if #satirlar > 0 and (d.gonderilen + d.hata >= TOPLU_ESIK or d.hata > 0 or mesaj or d.sinir) then
             UIManager:show(InfoMessage:new{ text = table.concat(satirlar, "\n"), timeout = d.hata > 0 and 8 or 4 })
         end
     end
@@ -1583,11 +1625,19 @@ function BinKitap:yavasGonder()
         end
         if os.time() - (ORTAK.son_etkilesim or 0) < ARKA_SESSIZLIK then return devam(ARKA_SESSIZLIK) end
         local k = self:kuyruk()
-        local oge = k[1]
+        local yer = self:siradakiYer(k)
+        local oge = yer and k[yer]
         if not oge then return bitir() end
         ORTAK.gonderiliyor = true
         local ok, sonuc, err, tur = pcall(function() return self:ogeGonder(oge) end)
         ORTAK.gonderiliyor = false
+        if ok and not sonuc and tur == "sunucu" and BinKitap.gunlukSinirMi(err) then
+            -- sırada kalsın; bu tür bugün bir daha denenmez, diğer işler sürer
+            self:sinirKaydet(oge.tur)
+            self.settings:flush()
+            d.sinir = true
+            return devam(ARKA_ARALIK)
+        end
         if not ok then
             logger.err("1000Kitap: arka plan gönderim hatası", sonuc)
             BinKitap.hataKaydet("eklenti", oge.tur, tostring(sonuc))
@@ -1600,7 +1650,7 @@ function BinKitap:yavasGonder()
         if not sonuc and tur == "yetki" then
             return bitir(err)
         end
-        table.remove(k, 1)
+        table.remove(k, yer)
         self.settings:saveSetting("kuyruk", k)
         local tekrarlanabilir = oge.tur == "kitaplik_ekle" or oge.tur == "kitaplik_cikar"
             or oge.tur == "durum" or oge.tur == "ilerleme" or oge.tur == "puan"
@@ -1621,7 +1671,7 @@ function BinKitap:yavasGonder()
             end
             if oge.tur == "ileti" and self.iletiGeriAl then self:iletiGeriAl(oge) end
         end
-        if #k == 0 then return bitir() end
+        if not self:siradakiYer(k) then return bitir() end
         devam(ARKA_ARALIK)
     end
     devam(2)
@@ -1637,16 +1687,22 @@ function BinKitap:uykuOncesiGonder()
     if #k == 0 then return 0 end
     local bas, gonderilen = os.time(), 0
     ORTAK.gonderiliyor = true
-    while k[1] and gonderilen < UYKU_EN_FAZLA and os.time() - bas < UYKU_SURESI do
-        local oge = k[1]
-        local ok, sonuc = pcall(function() return self:ogeGonder(oge) end)
+    while gonderilen < UYKU_EN_FAZLA and os.time() - bas < UYKU_SURESI do
+        local yer = self:siradakiYer(k)
+        local oge = yer and k[yer]
+        if not oge then break end
+        local ok, sonuc, err, tur = pcall(function() return self:ogeGonder(oge) end)
+        if ok and not sonuc and tur == "sunucu" and BinKitap.gunlukSinirMi(err) then
+            self:sinirKaydet(oge.tur)
+            sonuc = nil
+        end
         if not ok then
             logger.err("1000Kitap: uyku öncesi gönderim hatası", sonuc)
             BinKitap.hataKaydet("eklenti", oge.tur, tostring(sonuc))
             sonuc = nil
         end
         if not sonuc then break end
-        table.remove(k, 1)
+        table.remove(k, yer)
         gonderilen = gonderilen + 1
     end
     ORTAK.gonderiliyor = false
@@ -1661,6 +1717,7 @@ end
 function BinKitap:bekleyenleriSurdur(gecikme)
     local n = #self:kuyruk()
     if n == 0 or not Api:kimlikVar() or not NetworkMgr:isOnline() then return end
+    if not self:siradakiYer(self:kuyruk()) then return end -- hepsi günlük sınırda, yarın
     if n > TOPLU_ESIK then
         self:yavasGonder()
     else
@@ -1736,6 +1793,8 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
         table.sort(satirlar)
         for _i, m in ipairs(durum_mesajlari) do satirlar[#satirlar + 1] = m end
         for _i, h in ipairs(hatalar) do satirlar[#satirlar + 1] = h end
+        local sinir = self:sinirMetni()
+        if sinir then satirlar[#satirlar + 1] = sinir end
         local basarili_bir_sey = #satirlar > 0
         if durdu_mesaji then
             satirlar[#satirlar + 1] = durdu_mesaji
@@ -1764,9 +1823,16 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
             return bitir(_("Durduruldu."), "durdu")
         end
         local k = self:kuyruk()
-        local oge = k[1]
+        local yer = self:siradakiYer(k)
+        local oge = yer and k[yer]
         if not oge then return bitir() end
         local ok, sonuc, err, tur = pcall(function() return self:ogeGonder(oge) end)
+        if ok and not sonuc and tur == "sunucu" and BinKitap.gunlukSinirMi(err) then
+            -- sırada kalsın; bu tür bugün bir daha denenmez, diğer işler sürer
+            self:sinirKaydet(oge.tur)
+            yazilmadi = yazilmadi + 1
+            return UIManager:scheduleIn(GONDERIM_ARALIGI, sonraki)
+        end
         if not ok then
             logger.err("1000Kitap: gönderim hatası", sonuc)
             BinKitap.hataKaydet("eklenti", oge.tur, tostring(sonuc))
@@ -1775,7 +1841,7 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
         if not sonuc and (tur == "ag" or tur == "yetki") then
             return bitir(err, tur) -- öğe sırada kalsın, sonra tekrar denenir
         end
-        table.remove(k, 1)
+        table.remove(k, yer)
         self.settings:saveSetting("kuyruk", k)
         -- Tekrar gönderilmesi zarar vermeyen işlerde ayar dosyasını her seferinde yazma
         local tekrarlanabilir = oge.tur == "kitaplik_ekle" or oge.tur == "kitaplik_cikar"
@@ -1808,7 +1874,7 @@ function BinKitap:kuyruguGonder(sessiz, bitince)
                 hatalar[#hatalar + 1] = _("İletin kaybolmadı: \"İleti yaz\"ı açınca taslak olarak duruyor.")
             end
         end
-        if #k > 0 then
+        if self:siradakiYer(k) then
             -- uzun sıralarda 25 işte bir kısa mola: işlemci ve pil rahatlasın
             local bekle = (yapilan % 25 == 0) and 8 or GONDERIM_ARALIGI
             UIManager:scheduleIn(bekle, sonraki)
@@ -2194,7 +2260,11 @@ function BinKitap:bekleyenlerMenuOgesi()
             if ORTAK.arka_plan then
                 return T(_("Bekleyen gönderiler: %1 (arka planda gönderiliyor)"), #self:kuyruk())
             end
-            return T(_("Bekleyen gönderiler: %1"), #self:kuyruk())
+            local k = self:kuyruk()
+            if #k > 0 and not self:siradakiYer(k) then
+                return T(_("Bekleyen gönderiler: %1 (günlük sınır, yarın)"), #k)
+            end
+            return T(_("Bekleyen gönderiler: %1"), #k)
         end,
         keep_menu_open = true,
         callback = function()

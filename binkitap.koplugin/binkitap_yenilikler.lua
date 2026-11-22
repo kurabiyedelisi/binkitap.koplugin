@@ -3,6 +3,14 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.3",
+        maddeler = {
+            "1000Kitap'ın günlük alıntı sınırına (\"1 günde en fazla 500 alıntı\") takılan alıntılar artık silinmez: sırada bekler ve ertesi gün kendiliğinden gönderilir. O gün başka alıntı denenmez, diğer işler sürer. Bekleyen gönderiler menüsünde \"günlük sınır, yarın\" yazar.",
+            "Gönderilenleri 1000Kitap'la karşılaştır (Kobo Senkron menüsünde, ayrıca Kobo vurgularını gönder penceresinde): gönderildi görünen ama 1000Kitap'ta olmayan Kobo vurgularını bulur, sayısını gösterir, onaylarsan yeniden gönderilebilir yapar. Yalnızca okur, hesabına bir şey yazmaz.",
+            "Bir vurgunun herkese açık mı gizli mi gönderildiği artık kaydediliyor.",
+        },
+    },
+    {
         surum = "1.3.2",
         maddeler = {
             "Kobo notları arka planda aktarılıyor: ekran kilitlenmiyor, okumaya devam edebilirsin. Ne kadarının bittiği Kobo menüsünde ve 1000Kitap ekranında yüzde olarak görünür; bitince kısa bir özet çıkar. İstersen durdurursun; bitenler kaydedilir, kalanlar bir sonraki taramada sürer.",

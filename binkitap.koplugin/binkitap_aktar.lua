@@ -323,7 +323,7 @@ return function(BinKitap)
                         ogeler[#ogeler + 1] = { tur = "alinti", kitap_id = a.kitap.id, kitap_adi = a.kitap.adi,
                             soz = soz, sayfa = sayfa, ekbilgi = notu, yorum_ayari = yorum_ayari }
                     end
-                    gonderilen[self:vurguAnahtari(v)] = true
+                    gonderilen[self:vurguAnahtari(v)] = ozel and "gizli" or "acik"
                 end
                 if ds then
                     ds:saveSetting("binkitap_gonderilen", gonderilen)
