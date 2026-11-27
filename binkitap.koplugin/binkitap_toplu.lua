@@ -714,7 +714,17 @@ return function(BinKitap)
         end
 
         local function sirala(liste)
-            if #liste == 0 then return self:bildir(_("Eklenecek kitap yok.")) end
+            -- Hayalet modundaki kitaplar toplu işlemlerde atlanır (tek tek elle yapılabilir)
+            local hayalet = 0
+            local kalan = {}
+            for _i, e in ipairs(liste) do
+                if self:hayaletKitap(e.kitap.id) then hayalet = hayalet + 1 else kalan[#kalan + 1] = e end
+            end
+            liste = kalan
+            if hayalet > 0 then
+                self:bildir(T(_("%1 kitap hayalet modunda, atlandı."), hayalet), 3)
+            end
+            if #liste == 0 then return hayalet == 0 and self:bildir(_("Eklenecek kitap yok.")) or nil end
             local ogeler = {}
             for _i, e in ipairs(liste) do
                 local t = e.yol and tarihler[e.yol]
@@ -1131,7 +1141,8 @@ return function(BinKitap)
         end
         dialog = ButtonDialog:new{
             title = (esl and (T(_("1000Kitap: %1"), BinKitap.kitapEtiketi(esl))
-                    .. (esl.otomatik and _("\n(otomatik eşleşti, henüz onaylanmadı)") or "")) or _("1000Kitap'ta eşleşmedi"))
+                    .. (esl.otomatik and _("\n(otomatik eşleşti, henüz onaylanmadı)") or "")
+                    .. (self:hayaletMi(esl.id) and _("\n(hayalet modu: kendiliğinden bir şey gönderilmez)") or "")) or _("1000Kitap'ta eşleşmedi"))
                 .. "\n" .. dosyaAdi(yol),
             title_align = "left",
             buttons = {
@@ -1158,6 +1169,13 @@ return function(BinKitap)
                     { text = _("Kitaplığa ekle"), callback = kitaplik("kitaplik_ekle") },
                     { text = _("Kitaplıktan çıkar"), callback = kitaplik("kitaplik_cikar") },
                 },
+                {{ text = (esl and self:hayaletKitap(esl.id)) and _("Hayalet modunu kapat (bu kitap)")
+                        or _("Hayalet modu (bu kitap)"),
+                    enabled = esl ~= nil,
+                    callback = function()
+                        UIManager:close(dialog)
+                        if esl then self:hayaletAyarla(esl.id, not self:hayaletKitap(esl.id), esl.adi) end
+                    end }},
                 {{ text = _("Kapat"), callback = function() UIManager:close(dialog) end }},
             },
         }

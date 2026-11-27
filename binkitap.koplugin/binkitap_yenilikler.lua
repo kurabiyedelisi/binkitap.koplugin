@@ -3,6 +3,15 @@
 -- indirip boş bir ortamda okur, bu yüzden burada kod çalıştırılmaz.
 return {
     {
+        surum = "1.3.11",
+        maddeler = {
+            "Hayalet modu: 1000Kitap'a kendiliğinden hiçbir şey gitmez. Okuma durumu (Okuyorum, Okudum…), sayfa ilerlemesi, okuma seansları, renkle otomatik alıntılar, kitaplığa ekleme ve bitiş ekranı durur. Elle yaptıkların (alıntı gönder, durumu ayarla, sayfamı gönder, puan…) yine gider.",
+            "Kitap başına: okurken menüde \"Bu kitap için hayalet modu\" ya da dosya tarayıcısında kitaba basılı tutunca. Bu kitaplar toplu işlerde de (Okuduklarımı aktar, Kobo vurgularını gönder) atlanır.",
+            "Tüm kitaplar için: Ayarlar > Mod > Hayalet modu (tüm kitaplar). Hareketlere \"1000Kitap: hayalet modu aç/kapat\" de eklenebilir.",
+            "Açınca sırada bekleyen kendiliğinden işler silinir; hayalet modundayken yaptığın renkli vurgular kapattıktan sonra da kendiliğinden gönderilmez.",
+        },
+    },
+    {
         surum = "1.3.10",
         maddeler = {
             "Hız modu (Ayarlar > Mod): okurken eklentinin kendiliğinden yaptığı işler durur, eşitlemeyi sen yaparsın. Arka planda ve uyurken gönderim, Wi-Fi açma, kitap açılınca Kobo notlarını alma ve Kobo taraması, açılışta 1000Kitap durumuna bakma, ISBN ile kendiliğinden eşleştirme, hedef/alıntı tazeleme ve güncelleme denetimi yapılmaz; sayfa her %10 yerine kapanışta sıraya alınır.",

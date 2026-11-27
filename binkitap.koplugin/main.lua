@@ -137,6 +137,10 @@ function BinKitap:onDispatcherRegisterActions()
         category = "none", event = "BinKitapSimdiGonder",
         title = _("1000Kitap: bekleyenleri gönder"), general = true,
     })
+    Dispatcher:registerAction("binkitap_hayalet_modu", {
+        category = "none", event = "BinKitapHayaletModu",
+        title = _("1000Kitap: hayalet modu aç/kapat"), general = true,
+    })
     Dispatcher:registerAction("binkitap_hiz_modu", {
         category = "none", event = "BinKitapHizModu",
         title = _("1000Kitap: hız modu aç/kapat"), general = true,
@@ -387,7 +391,7 @@ function BinKitap:eslesmeKaydet(yol, kitap, ertele)
     local eslesmeler = self.settings:readSetting("eslesmeler") or {}
     local onceki = eslesmeler[yol]
     local yeni_onay = onceki and onceki.otomatik and not kitap.otomatik and onceki.id == kitap.id
-    if self.settings:isTrue("kitapliga_ekle") and not kitap.otomatik
+    if self.settings:isTrue("kitapliga_ekle") and not kitap.otomatik and not self:hayaletMi(kitap.id)
             and (not onceki or onceki.id ~= kitap.id or yeni_onay) then
         if onceki and onceki.id ~= kitap.id then
             -- sadece eklentinin kendi eklediği eski baskıyı çıkar; kullanıcının önceden kitaplığında olana dokunma
@@ -1023,6 +1027,7 @@ function BinKitap:renkTaramasi()
     if type(eylemler) ~= "table" or next(eylemler) == nil then return 0 end
     local kitap = self:kitapBilgisi()
     if not kitap or kitap.otomatik then return 0 end -- onaylanınca gönderilir
+    if self:hayaletMi(kitap.id) then return 0 end
     local liste = self.ui.annotation and self.ui.annotation.annotations
     if type(liste) ~= "table" then return 0 end
     if not kitap.renk_baslangic then
@@ -1045,17 +1050,25 @@ function BinKitap:renkTaramasi()
     end
     local gonderilen = self.ui.doc_settings:readSetting("binkitap_gonderilen") or {}
     local eklenen = 0
+    local hayalet_bitti = self.settings:readSetting("hayalet_bitti")
+    local kb = self.settings:readSetting("hayalet_kitap_bitti")
+    kb = type(kb) == "table" and kb[tostring(kitap.id)]
+    if kb and (not hayalet_bitti or kb > hayalet_bitti) then hayalet_bitti = kb end
     for _i, a in ipairs(liste) do
         -- Kobo'dan aktarılan vurgular kendiliğinden gönderilmez (Vurgular'dan seçilerek gönderilebilir)
         local eylem = a.drawer and a.color and not a.kobo_id and eylemler[a.color]
         local esik = kitap.renk_baslangic
         if eylem and zamanlar[a.color] and zamanlar[a.color] > esik then esik = zamanlar[a.color] end
+        -- hayalet modundayken yapılan vurgular sonradan da kendiliğinden gitmez
+        if hayalet_bitti and hayalet_bitti > esik then esik = hayalet_bitti end
         if eylem and kirp(a.text) ~= "" and tostring(a.datetime or "") > esik then
             local anahtar = self:vurguAnahtari(a)
             if not gonderilen[anahtar] then
                 -- nasıl gönderildiği: 1000Kitap'la karşılaştırırken gizliler atlanır
                 gonderilen[anahtar] = (eylem == "ozel") and "gizli" or "acik"
-                self:siraya(self:vurgudanOge(kitap, a, eylem == "ozel"))
+                local oge = self:vurgudanOge(kitap, a, eylem == "ozel")
+                oge.renk = true -- renk kuralıyla kendiliğinden
+                self:siraya(oge)
                 eklenen = eklenen + 1
             end
         end
@@ -1073,6 +1086,10 @@ end
 --- Otomatik (kullanıcı istemeden) yapılan durum değişikliği; istenirse önce sorar.
 function BinKitap:otomatikDurum(kitap, durum, secenekler)
     secenekler = secenekler or {}
+    if self:hayaletMi(kitap.id) then
+        logger.info("1000Kitap: hayalet modu, durum gönderilmedi", kitap.id, durum)
+        return
+    end
     if kitap.otomatik then
         logger.info("1000Kitap: onaylanmamış otomatik eşleşme, durum gönderilmedi", kitap.id, durum)
         return
@@ -1135,7 +1152,9 @@ end
 function BinKitap:modMenusu()
     return {
         text_func = function()
-            return self:hizModu() and _("Mod: Hız modu") or _("Mod: Normal (kendi ayarların)")
+            local t = self:hizModu() and _("Mod: Hız modu") or _("Mod: Normal (kendi ayarların)")
+            if self:hayaletGenel() then t = t .. _(" · hayalet") end
+            return t
         end,
         help_text = _("Hız modu okurken eklentinin kendiliğinden yaptığı her işi durdurur; gönderimi sen yaparsın. Ayarlarına dokunmaz: Normal moda dönünce hepsi eskisi gibi."),
         sub_item_table = {
@@ -1146,10 +1165,12 @@ function BinKitap:modMenusu()
             },
             {
                 text = _("Hız modu (otomatik işler kapalı, elle eşitle)"), radio = true,
+                separator = true,
                 checked_func = function() return self:hizModu() end,
                 callback = function() self:hizModuAyarla(true) end,
                 help_text = _("Kapalı olanlar: arka planda ve uyurken gönderim, Wi-Fi'yi açıp gönderme, kitap açılınca Kobo notlarını alma, dosya tarayıcısında Kobo taraması, açılışta 1000Kitap durumuna bakma, ISBN ile kendiliğinden eşleştirme, basılı sayfa sayısını indirme, hedef ve alıntı tazeleme, güncelleme denetimi, \"Okudum\"dan sonra hedef bildirimi. Sayfa ilerlemesi \"her %10\" yerine kapanışta sıraya alınır. Alıntılar, durumlar ve ilerleme sırada bekler; Bekleyen gönderiler'e dokununca gider."),
             },
+            self:hayaletGenelOgesi(),
         },
         separator = true,
     }
@@ -1158,6 +1179,104 @@ end
 function BinKitap:onBinKitapHizModu()
     self:hizModuAyarla(not self:hizModu())
     return true
+end
+
+---------------------------------------------------------------------------
+-- Hayalet modu: 1000Kitap'a kendiliğinden hiçbir şey gitmez (durum, sayfa, seans,
+-- renkle alıntı, kitaplığa ekleme, bitiş ekranı). Elle yaptıkların gider.
+-- Genel (tüm kitaplar) ya da kitap başına.
+---------------------------------------------------------------------------
+
+function BinKitap:hayaletGenel()
+    return self.settings:isTrue("hayalet_modu")
+end
+
+function BinKitap:hayaletKitap(kitap_id)
+    local h = kitap_id and self.settings:readSetting("hayalet_kitaplar")
+    return type(h) == "table" and h[tostring(kitap_id)] == true
+end
+
+function BinKitap:hayaletMi(kitap_id)
+    return self:hayaletGenel() or self:hayaletKitap(kitap_id)
+end
+
+--- Kendiliğinden (kullanıcı istemeden) sıraya girmiş iş mi?
+function BinKitap.otomatikOge(oge)
+    return oge.tur == "ilerleme" or oge.tur == "seans" or oge.renk == true
+        or ((oge.tur == "durum" or oge.tur == "kitaplik_ekle" or oge.tur == "kitaplik_cikar") and oge.otomatik == true)
+end
+
+--- kitap_id nil: genel hayalet modu. Açılınca o kapsamdaki kendiliğinden işler sıradan çıkar;
+-- kapanınca o ana kadar yapılan renkli vurgular sonradan kendiliğinden gönderilmez.
+function BinKitap:hayaletAyarla(kitap_id, acik, kitap_adi)
+    local simdi = os.date("%Y-%m-%d %H:%M:%S")
+    if kitap_id then
+        local id = tostring(kitap_id)
+        local h = self.settings:readSetting("hayalet_kitaplar") or {}
+        h[id] = acik and true or nil
+        self.settings:saveSetting("hayalet_kitaplar", h)
+        if not acik then
+            local b = self.settings:readSetting("hayalet_kitap_bitti") or {}
+            b[id] = simdi
+            self.settings:saveSetting("hayalet_kitap_bitti", b)
+        end
+    elseif acik then
+        self.settings:makeTrue("hayalet_modu")
+    else
+        self.settings:delSetting("hayalet_modu")
+        self.settings:saveSetting("hayalet_bitti", simdi)
+    end
+    local silinen = 0
+    if acik then
+        local yeni = {}
+        for _i, oge in ipairs(self:kuyruk()) do
+            if BinKitap.otomatikOge(oge) and (not kitap_id or tostring(oge.kitap_id) == tostring(kitap_id)) then
+                silinen = silinen + 1
+            else
+                yeni[#yeni + 1] = oge
+            end
+        end
+        if silinen > 0 then self.settings:saveSetting("kuyruk", yeni) end
+    end
+    self.settings:flush()
+    local ek = silinen > 0 and T(_("\n\nSırada bekleyen %1 kendiliğinden iş silindi."), silinen) or ""
+    if kitap_id then
+        self:bildir((acik and T(_("“%1” için hayalet modu açık: bu kitaptan 1000Kitap'a kendiliğinden hiçbir şey gitmez. Elle yaptıkların gider."), kitap_adi or kitap_id)
+            or T(_("“%1” için hayalet modu kapandı."), kitap_adi or kitap_id)) .. ek, 4)
+    else
+        self:bildir((acik and _("Hayalet modu açık (tüm kitaplar): 1000Kitap'a kendiliğinden hiçbir şey gitmez. Elle yaptıkların gider.")
+            or _("Hayalet modu kapandı.")) .. ek, 4)
+    end
+end
+
+function BinKitap:onBinKitapHayaletModu()
+    self:hayaletAyarla(nil, not self:hayaletGenel())
+    return true
+end
+
+function BinKitap:hayaletGenelOgesi()
+    return {
+        text = _("Hayalet modu (tüm kitaplar)"),
+        checked_func = function() return self:hayaletGenel() end,
+        callback = function() self:hayaletAyarla(nil, not self:hayaletGenel()) end,
+        help_text = _("Açıkken 1000Kitap'a kendiliğinden hiçbir şey gitmez: okuma durumu (Okuyorum, Okudum…), sayfa ilerlemesi, okuma seansları, renkle otomatik alıntılar, kitaplığa ekleme ve bitiş ekranı. Elle yaptıkların (alıntı gönder, durumu ayarla, sayfamı gönder, puan…) yine gider. Tek bir kitap için: okurken menüde \"Bu kitap için hayalet modu\"."),
+    }
+end
+
+function BinKitap:hayaletKitapOgesi()
+    return {
+        text = _("Bu kitap için hayalet modu"),
+        enabled_func = function() return self:kitapBilgisi() ~= nil end,
+        checked_func = function()
+            local k = self:kitapBilgisi()
+            return k ~= nil and self:hayaletKitap(k.id)
+        end,
+        callback = function()
+            local k = self:kitapBilgisi()
+            if k then self:hayaletAyarla(k.id, not self:hayaletKitap(k.id), k.adi) end
+        end,
+        help_text = _("Bu kitaptan 1000Kitap'a kendiliğinden hiçbir şey gitmez: okuma durumu, sayfa ilerlemesi, seanslar, renkle otomatik alıntılar, kitaplığa ekleme, bitiş ekranı. Toplu işlemlerde (ör. Okuduklarımı aktar, Kobo vurgularını gönder) de atlanır. Elle yaptıkların gider."),
+    }
 end
 
 function BinKitap:okuyorumSirala(kitap)
@@ -1179,6 +1298,7 @@ BinKitap.OKUYORUM_YUZDE, BinKitap.OKUYORUM_SAYFA = 0.02, 20
 
 --- Açılışta/eşleşince: "Açılınca" ayarındaysa hemen Okuyorum yapar.
 function BinKitap:acilistaOkuyorum(kitap)
+    if self:hayaletMi(kitap.id) then return end
     if self:okuyorumZamani() == "acilis" and not kitap.okuyorum_islendi then
         self:okuyorumSirala(kitap)
     end
@@ -1199,6 +1319,7 @@ function BinKitap:okumaSay(pageno)
     local kitap = self:kitapBilgisi()
     if not kitap or kitap.otomatik then return end -- eşleşmemiş/doğrulanmamış: sayma
     if kitap.okuyorum_islendi then self._okuma_sayildi = true; return end
+    if self:hayaletMi(kitap.id) then return end
     self._okunan = (self._okunan or 0) + (pageno - onceki)
     local toplam = doc:getPageCount()
     if not toplam or toplam <= 0 then return end
@@ -1265,6 +1386,7 @@ end
 function BinKitap:bitisEkrani()
     local kitap = self:kitapBilgisi()
     if not kitap or kitap.okudum_islendi or not self.settings:nilOrTrue("bitis_ekrani") then return end
+    if self:hayaletMi(kitap.id) then return end -- hayalet modu: sormadan geç
     if kitap.otomatik then
         return self:otomatikEslesmeSor(kitap, function() self:bitisEkrani() end)
     end
@@ -1364,6 +1486,7 @@ end
 function BinKitap:ilerlemeSirala(kitap)
     -- Otomatik (onaylanmamış) eşleşmede de gönderilir: gönderirken kitabın 1000Kitap'ta
     -- "Okuyorum" olması şart, yanlış eşleşmiş bir kitaba sayfa yazılmaz.
+    if self:hayaletMi(kitap.id) then return end
     local yuzde = self:mevcutYuzde()
     if not yuzde then return end
     self:siraya({ tur = "ilerleme", kitap_id = kitap.id, kitap_adi = kitap.adi,
@@ -1392,7 +1515,7 @@ function BinKitap:seansBitir()
     if not s or s.toplam < SEANS_ALT_SINIR or not self.settings:isTrue("seans_kaydi") then return false end
     local kitap = self:kitapBilgisi()
     local yuzde = self:mevcutYuzde()
-    if not kitap or not yuzde or kitap.otomatik then return false end
+    if not kitap or not yuzde or kitap.otomatik or self:hayaletMi(kitap.id) then return false end
     self:siraya({
         tur = "seans", kitap_id = kitap.id, kitap_adi = kitap.adi,
         sure = math.min(s.toplam, SEANS_UST_SINIR), yuzde = yuzde,
@@ -1705,6 +1828,8 @@ function BinKitap:yenidenOkumaSor(oge, hedef)
 end
 
 function BinKitap:ogeGonder(oge)
+    -- Hayalet modunda kendiliğinden işler gitmez (açılmadan önce sıraya girmiş olsalar da)
+    if BinKitap.otomatikOge(oge) and self:hayaletMi(oge.kitap_id) then return { atlandi = true } end
     if oge.tur == "alinti" then
         local sonuc, err, tur = Api:alintiEkle(oge.kitap_id, oge.soz, oge.sayfa, oge.ekbilgi, {
             ilerlemeyi_guncelle = self.settings:isTrue("ilerleme_guncelle"),
@@ -2653,6 +2778,7 @@ function BinKitap:menuOgeleri()
                 local k = self:kitapBilgisi()
                 if not k then return _("Kitabı 1000Kitap'ta eşleştir") end
                 local ek = k.otomatik and _(" · otomatik, onaylanmadı") or ""
+                if self:hayaletMi(k.id) then ek = ek .. _(" · hayalet") end
                 if k.yayinevi and k.yayinevi ~= "" then return T(_("Kitap: %1 (%2)"), k.adi, k.yayinevi) .. ek end
                 return T(_("Kitap: %1"), k.adi) .. ek
             end,
@@ -2686,6 +2812,7 @@ function BinKitap:menuOgeleri()
             callback = function() self:sayfamiGonder() end,
             help_text = _("Kitapta kaçıncı sayfada olduğunu hemen 1000Kitap'a yazar ve sonucu söyler. Kitap orada \"Okuyorum\" değilse önce Okuyorum yapmayı önerir; \"Okudum\" ise yeni bir okuma başlatmayı ya da durumu düzeltmeyi sorar."),
         }
+        ogeler[#ogeler + 1] = self:hayaletKitapOgesi()
         ogeler[#ogeler + 1] = { text = _("Puan ver"), callback = function() self:puanIstegi() end }
         if self.topluGonder then
             ogeler[#ogeler + 1] = { text = _("Bu kitabın vurgularını gönder"), callback = function() self:topluGonder() end }

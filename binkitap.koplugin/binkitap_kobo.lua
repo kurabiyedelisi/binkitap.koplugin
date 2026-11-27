@@ -247,6 +247,7 @@ return function(BinKitap)
         if not db then return self:bildir(_("Kobo veritabanı okunamadı."), 3) end
         local DocSettings = require("docsettings")
         local hazir, dogrulanmamis, eslesmemis, toplam = {}, {}, 0, 0
+        local hayaletler = {} -- hayalet modundaki kitaplar: "hepsini gönder"e girmez, elle seçilebilir
         for dosya, recs in pairs(db.annotations) do
             local ok_ds, ds = pcall(function()
                 return DocSettings:hasSidecarFile(dosya) and DocSettings:open(dosya) or nil
@@ -265,6 +266,8 @@ return function(BinKitap)
                         local e = { yol = dosya, kitap = k, vurgular = yeni, sayfa_sayisi = tonumber(ds:readSetting("doc_pages")) }
                         if k.otomatik then
                             dogrulanmamis[#dogrulanmamis + 1] = e
+                        elseif self:hayaletKitap(k.id) then
+                            hayaletler[#hayaletler + 1] = e
                         else
                             hazir[#hazir + 1] = e
                             toplam = toplam + #yeni
@@ -275,7 +278,7 @@ return function(BinKitap)
         end
         table.sort(hazir, function(x, y) return tostring(x.kitap.adi) < tostring(y.kitap.adi) end)
         local karsilastir = { text = _("1000Kitap'ta olmayanları bul"), callback = function() self:koboKarsilastir() end }
-        if #hazir == 0 and #dogrulanmamis == 0 then
+        if #hazir == 0 and #dogrulanmamis == 0 and #hayaletler == 0 then
             local metin = eslesmemis > 0
                 and T(_("Kobo'dan gelen gönderilmemiş vurgular %1 kitapta, ama bu kitaplar 1000Kitap'ta eşleşmemiş. Önce Kütüphaneyi eşleştir'i çalıştır."), eslesmemis)
                 or _("1000Kitap'a gönderilmemiş Kobo vurgusu yok.")
@@ -295,6 +298,9 @@ return function(BinKitap)
             local ogeler = {}
             for _i, e in ipairs(hazir) do
                 ogeler[#ogeler + 1] = { metin = e.kitap.adi, ek = T(_("%1 vurgu"), #e.vurgular), secili = true, veri = e }
+            end
+            for _i, e in ipairs(hayaletler) do
+                ogeler[#ogeler + 1] = { metin = e.kitap.adi, ek = T(_("%1 vurgu · hayalet modu"), #e.vurgular), secili = false, veri = e }
             end
             for _i, e in ipairs(dogrulanmamis) do
                 ogeler[#ogeler + 1] = { metin = e.kitap.adi, ek = T(_("%1 vurgu · eşleşme doğrulanmadı"), #e.vurgular), secili = false, veri = e }

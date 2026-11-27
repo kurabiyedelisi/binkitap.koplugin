@@ -4,7 +4,7 @@ Kobo'da (ya da KOReader çalışan herhangi bir e-okuyucuda) okuduğun kitabı 1
 
 > Bu eklenti 1000Kitap'ın resmi bir ürünü değildir. Sitenin kendi kullandığı bağlantılarla çalışır; 1000Kitap tarafında bir değişiklik olursa eklentinin de güncellenmesi gerekebilir.
 
-**Sürüm:** 1.3.10 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
+**Sürüm:** 1.3.11 · **Gerekenler:** KOReader 2024.07 ya da daha yenisi, bir 1000Kitap hesabı
 
 ## Neler yapar
 
@@ -204,6 +204,15 @@ Eklenti açıkken KOReader yavaşlıyorsa: **Araçlar → 1000Kitap → Ayarlar 
 - Sayfa ilerlemesi "her %10" yerine kapanışta sıraya alınır.
 
 Alıntılar, durumlar ve ilerleme sırada bekler; **Bekleyen gönderiler**'e dokununca (ya da **1000Kitap: bekleyenleri gönder** hareketiyle) gider. Hız modu hiçbir ayarını değiştirmez: **Normal mod**'a dönünce her şey senin ayarlarınla eskisi gibi çalışır ve bekleyenler gönderilir. Hareketlere **1000Kitap: hız modu aç/kapat** de eklenebilir.
+
+### Hayalet modu
+
+Bir kitabı (ya da hepsini) 1000Kitap'tan hariç tutmak için. Açıkken 1000Kitap'a **kendiliğinden hiçbir şey gitmez**: okuma durumu (Okuyorum, Okudum…), sayfa ilerlemesi, okuma seansları, renkle otomatik alıntılar, kitaplığa ekleme ve bitiş ekranı durur. **Elle yaptıkların gider** (alıntı gönder, durumu ayarla, sayfamı gönder, puan…).
+
+- **Tek kitap:** okurken **1000Kitap → Bu kitap için hayalet modu**, ya da dosya tarayıcısında kitaba basılı tut → **Hayalet modu (bu kitap)**. Menüde kitabın adının yanında "hayalet" yazar. Bu kitaplar toplu işlerde de (Okuduklarımı aktar, Kobo vurgularını gönder) atlanır; Kobo listesinden elle seçilebilir.
+- **Tüm kitaplar:** **Ayarlar → Mod → Hayalet modu (tüm kitaplar)**. Hareketlere **1000Kitap: hayalet modu aç/kapat** de eklenebilir.
+
+Açınca sırada bekleyen kendiliğinden işler silinir. Hayalet modundayken yaptığın renkli vurgular kapattıktan sonra da kendiliğinden gönderilmez.
 
 ### Kısayollar ve çevrimdışı kullanım
 
